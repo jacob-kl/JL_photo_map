@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Our Photo Map</title>
+
+  <!-- Leaflet -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
+
+  <!-- Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- App styles -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="logo-icon">📍</div>
+    <span>Our Photo Map</span>
+  </div>
+
+  <!-- Map -->
+  <div id="map"></div>
+
+  <!-- Pin mode banner -->
+  <div id="pin-banner">📍 Tap anywhere on the map to place your photo</div>
+
+  <!-- FAB: add photo -->
+  <button id="fab" onclick="openUpload()" title="Add photo">
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
+         stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="12" y1="5" x2="12" y2="19"/>
+      <line x1="5"  y1="12" x2="19" y2="12"/>
+    </svg>
+  </button>
+
+  <!-- ── Viewer modal ── -->
+  <div class="overlay" id="viewer-overlay" onclick="maybeCloseViewer(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="viewer-location" id="vwr-location">📍</div>
+      <div class="viewer-title"   id="vwr-title">Photos</div>
+      <div class="photo-grid"     id="vwr-grid"></div>
+    </div>
+  </div>
+
+  <!-- ── Upload modal ── -->
+  <div class="overlay" id="upload-overlay" onclick="maybeCloseUpload(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="upload-title">Add a photo</div>
+
+      <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
+        <div id="dz-content">
+          <div class="dz-icon">📷</div>
+          <div class="dz-main">Choose a photo</div>
+          <div class="dz-sub">Tap here or drag and drop</div>
+        </div>
+      </div>
+      <input type="file" id="file-input" accept="image/*" onchange="handleFile(event)"/>
+
+      <textarea class="caption-field" id="caption" rows="2" placeholder="Add a caption… (optional)"></textarea>
+
+      <div class="loc-label">Where was this taken?</div>
+      <div class="loc-opts">
+        <div class="loc-opt" id="opt-gps" onclick="useGPS()">
+          <div class="lo-icon">🎯</div>
+          <div class="lo-name">My location</div>
+          <div class="lo-sub">GPS auto-detect</div>
+        </div>
+        <div class="loc-opt" id="opt-pin" onclick="startPin()">
+          <div class="lo-icon">🗺️</div>
+          <div class="lo-name">Drop a pin</div>
+          <div class="lo-sub">Tap on the map</div>
+        </div>
+      </div>
+      <div class="loc-status" id="loc-status"></div>
+
+      <button class="btn-add" id="add-btn" disabled onclick="savePhoto()">
+        Add to Map
+      </button>
+    </div>
+  </div>
+
+  <!-- Lightbox -->
+  <div id="lightbox" onclick="closeLightbox()">
+    <button id="lightbox-close" onclick="closeLightbox()">×</button>
+    <img id="lightbox-img" src="" alt=""/>
+    <div id="lightbox-caption"></div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+  <!-- Leaflet scripts -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
+
+  <!-- App logic -->
+  <script src="app.js"></script>
+
+</body>
+</html>

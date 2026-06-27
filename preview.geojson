@@ -1,0 +1,75 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-104.9903, 39.7392]
+      },
+      "properties": {
+        "name": "Denver, Colorado",
+        "description": "3 photos · Red Rocks at sunset, Downtown Denver, Rocky Mountains",
+        "marker-symbol": "camera",
+        "marker-color": "#f59e0b",
+        "marker-size": "medium"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-74.0060, 40.7128]
+      },
+      "properties": {
+        "name": "New York City",
+        "description": "2 photos · Central Park, Times Square",
+        "marker-symbol": "camera",
+        "marker-color": "#f59e0b",
+        "marker-size": "medium"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [135.7681, 35.0116]
+      },
+      "properties": {
+        "name": "Kyoto, Japan",
+        "description": "4 photos · Fushimi Inari, Arashiyama bamboo, Temple gardens, Golden hour",
+        "marker-symbol": "camera",
+        "marker-color": "#f59e0b",
+        "marker-size": "medium"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [-72.8, -50.9]
+      },
+      "properties": {
+        "name": "Patagonia, Argentina",
+        "description": "2 photos · Torres del Paine, Lakes and peaks",
+        "marker-symbol": "camera",
+        "marker-color": "#f59e0b",
+        "marker-size": "medium"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [25.4615, 36.3932]
+      },
+      "properties": {
+        "name": "Santorini, Greece",
+        "description": "1 photo · Oia at dusk",
+        "marker-symbol": "camera",
+        "marker-color": "#f59e0b",
+        "marker-size": "medium"
+      }
+    }
+  ]
+}
