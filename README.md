@@ -83,40 +83,55 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isMember(familyId) {
-      return request.auth != null
-        && exists(/databases/$(database)/documents/families/$(familyId))
-        && request.auth.uid in
-           get(/databases/$(database)/documents/families/$(familyId)).data.members;
+    // A connection doc ID is the two UIDs sorted alphabetically and joined with "_".
+    // This lets us check in rules whether two users are connected without extra lookups.
+    function isConnected(ownerUid) {
+      let a = request.auth.uid < ownerUid ? request.auth.uid : ownerUid;
+      let b = request.auth.uid < ownerUid ? ownerUid : request.auth.uid;
+      return exists(/databases/$(database)/documents/connections/$(a + '_' + b));
     }
 
+    // User profiles — anyone signed in can read (for display names);
+    // each user can only write their own.
     match /users/{uid} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read:  if request.auth != null;
+      allow write: if request.auth != null && request.auth.uid == uid;
     }
 
-    match /families/{familyId} {
-      allow read: if request.auth != null;
-      allow create: if request.auth != null
-        && request.resource.data.adminUid == request.auth.uid
-        && request.auth.uid in request.resource.data.members;
-      allow update: if request.auth != null && (
-        resource.data.adminUid == request.auth.uid
-        || (request.auth.uid in request.resource.data.members
-            && request.resource.data.adminUid == resource.data.adminUid)
-      );
-    }
-
+    // Invite codes — any signed-in user can read one to validate it;
+    // only the creator can create (createdBy must match the requester).
     match /inviteCodes/{code} {
       allow read:   if request.auth != null;
       allow create: if request.auth != null
-        && isMember(request.resource.data.familyId);
+        && request.auth.uid == request.resource.data.createdBy;
     }
 
-    match /locations/{locationId} {
-      allow read:   if request.auth != null && isMember(resource.data.familyId);
-      allow create: if request.auth != null && isMember(request.resource.data.familyId);
-      allow update: if request.auth != null && isMember(resource.data.familyId);
+    // Connections — a mutual link between exactly two users.
+    // Either user in the pair can read it; either can create it
+    // (the person entering the code creates the doc for both of them).
+    match /connections/{pairId} {
+      allow read:   if request.auth != null
+        && request.auth.uid in resource.data.uids;
+      allow create: if request.auth != null
+        && request.auth.uid in request.resource.data.uids
+        && request.resource.data.uids.size() == 2;
       allow delete: if false;
+    }
+
+    // Locations — visible to the owner and anyone connected to the owner.
+    match /locations/{locationId} {
+      allow read:   if request.auth != null && (
+        resource.data.ownedBy == request.auth.uid ||
+        isConnected(resource.data.ownedBy)
+      );
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.ownedBy;
+      allow update: if request.auth != null && (
+        resource.data.ownedBy == request.auth.uid ||
+        isConnected(resource.data.ownedBy)
+      );
+      allow delete: if request.auth != null
+        && resource.data.ownedBy == request.auth.uid;
     }
   }
 }
