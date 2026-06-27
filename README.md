@@ -1,8 +1,8 @@
 <div align="center">
 
-<h1>📍 Our Photo Map</h1>
+<h1>📍 Kline of Sight</h1>
 
-<p>A shared travel photo map for you and your people.<br/>
+<p>A shared travel photo map for the Kline family.<br/>
 Upload photos from anywhere — they pin to the map exactly where you took them.</p>
 
 <p>
@@ -82,11 +82,41 @@ You need three accounts, all free, all no credit card required.
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function isMember(familyId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/families/$(familyId))
+        && request.auth.uid in
+           get(/databases/$(database)/documents/families/$(familyId)).data.members;
+    }
+
+    match /users/{uid} {
+      allow read, write: if request.auth != null && request.auth.uid == uid;
+    }
+
+    match /families/{familyId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null
+        && request.resource.data.adminUid == request.auth.uid
+        && request.auth.uid in request.resource.data.members;
+      allow update: if request.auth != null && (
+        resource.data.adminUid == request.auth.uid
+        || (request.auth.uid in request.resource.data.members
+            && request.resource.data.adminUid == resource.data.adminUid)
+      );
+    }
+
+    match /inviteCodes/{code} {
+      allow read:   if request.auth != null;
+      allow create: if request.auth != null
+        && isMember(request.resource.data.familyId);
+    }
+
     match /locations/{locationId} {
-      allow read:   if true;                  // anyone with the link can view
-      allow create: if request.auth != null;  // must be signed in to add a location
-      allow update: if request.auth != null;  // must be signed in to add a photo
-      allow delete: if false;                 // no deletion from the app
+      allow read:   if request.auth != null && isMember(resource.data.familyId);
+      allow create: if request.auth != null && isMember(request.resource.data.familyId);
+      allow update: if request.auth != null && isMember(resource.data.familyId);
+      allow delete: if false;
     }
   }
 }
