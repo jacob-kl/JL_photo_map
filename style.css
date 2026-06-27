@@ -877,3 +877,216 @@ body {
   align-items: center;
   justify-content: center;
 }
+
+/* ─────────────────────────────────────────────────────────
+   Header icon button (invite link icon)
+───────────────────────────────────────────────────────── */
+.header-icon-btn {
+  background: none;
+  border: none;
+  color: #64748b;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  transition: background .15s, color .15s;
+}
+.header-icon-btn:hover {
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Family gate (full-screen onboarding overlay)
+───────────────────────────────────────────────────────── */
+.family-gate {
+  position: fixed;
+  inset: 0;
+  background: linear-gradient(160deg, #fffbeb 0%, #fff 60%);
+  z-index: 9000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.family-gate.show { display: flex; }
+
+.gate-card {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, .10);
+  padding: 36px 28px;
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
+}
+
+.gate-logo {
+  font-size: 40px;
+  margin-bottom: 10px;
+}
+
+.gate-title {
+  font-size: 26px;
+  font-weight: 800;
+  color: #0f172a;
+  letter-spacing: -.03em;
+  margin-bottom: 6px;
+}
+
+.gate-greeting {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 28px;
+}
+
+.gate-section {
+  text-align: left;
+}
+
+.gate-label {
+  font-size: 12px;
+  font-weight: 700;
+  color: #94a3b8;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  margin-bottom: 10px;
+}
+
+.code-input {
+  width: 100%;
+  font-family: 'Inter', monospace;
+  font-size: 28px;
+  font-weight: 800;
+  letter-spacing: .25em;
+  text-align: center;
+  border: 2px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px 10px;
+  color: #0f172a;
+  outline: none;
+  text-transform: uppercase;
+  margin-bottom: 10px;
+  transition: border-color .15s;
+}
+.code-input:focus { border-color: #f59e0b; }
+
+.code-error {
+  font-size: 13px;
+  color: #ef4444;
+  min-height: 18px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.btn-gate-primary {
+  width: 100%;
+  background: linear-gradient(135deg, #f59e0b, #f97316);
+  color: #fff;
+  border: none;
+  border-radius: 14px;
+  padding: 15px;
+  font-size: 15px;
+  font-weight: 700;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .2s;
+  box-shadow: 0 4px 14px rgba(245, 158, 11, .3);
+}
+.btn-gate-primary:hover    { opacity: .9; }
+.btn-gate-primary:disabled { opacity: .5; cursor: not-allowed; }
+
+.gate-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 22px 0;
+  color: #cbd5e1;
+  font-size: 13px;
+}
+.gate-divider::before,
+.gate-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: #e2e8f0;
+}
+
+.btn-gate-secondary {
+  width: 100%;
+  background: #f8fafc;
+  color: #475569;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 14px;
+  padding: 14px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background .15s, border-color .15s;
+  margin-bottom: 8px;
+}
+.btn-gate-secondary:hover    { background: #f1f5f9; border-color: #cbd5e1; }
+.btn-gate-secondary:disabled { opacity: .5; cursor: not-allowed; }
+
+.gate-hint {
+  font-size: 11px;
+  color: #94a3b8;
+  text-align: center;
+  line-height: 1.5;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Invite panel — code display
+───────────────────────────────────────────────────────── */
+.invite-desc {
+  font-size: 14px;
+  color: #64748b;
+  margin-bottom: 20px;
+  line-height: 1.5;
+}
+
+.invite-code-display {
+  background: #f8fafc;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 24px 20px;
+  text-align: center;
+}
+
+.code-generating {
+  color: #94a3b8;
+  font-size: 14px;
+  padding: 8px 0;
+}
+
+.big-code {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: .25em;
+  color: #0f172a;
+  font-family: 'Inter', monospace;
+  margin-bottom: 8px;
+}
+
+.code-expires {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: 500;
+  margin-bottom: 16px;
+}
+
+.btn-copy {
+  background: #0f172a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 10px 24px;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity .15s;
+}
+.btn-copy:hover { opacity: .85; }
