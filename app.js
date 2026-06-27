@@ -307,6 +307,11 @@ function resetUpload() {
   document.getElementById('caption').placeholder = 'Add a caption… (optional)';
   document.getElementById('opt-gps').classList.remove('active');
   document.getElementById('opt-pin').classList.remove('active');
+  document.getElementById('opt-search').classList.remove('active');
+  document.getElementById('search-panel').classList.remove('show');
+  document.getElementById('search-input').value  = '';
+  document.getElementById('search-results').classList.remove('show');
+  document.getElementById('search-results').innerHTML = '';
   document.getElementById('add-btn').disabled    = true;
   document.getElementById('add-btn').textContent = 'Add to Map';
 
@@ -396,6 +401,8 @@ dropZone.addEventListener('drop', function(e) {
 function useGPS() {
   document.getElementById('opt-gps').classList.add('active');
   document.getElementById('opt-pin').classList.remove('active');
+  document.getElementById('opt-search').classList.remove('active');
+  document.getElementById('search-panel').classList.remove('show');
   showStatus('Getting your location...', false);
 
   if (!navigator.geolocation) {
@@ -421,6 +428,8 @@ function useGPS() {
 function startPin() {
   document.getElementById('opt-pin').classList.add('active');
   document.getElementById('opt-gps').classList.remove('active');
+  document.getElementById('opt-search').classList.remove('active');
+  document.getElementById('search-panel').classList.remove('show');
   document.getElementById('upload-overlay').classList.remove('open');
   enterPinMode();
 }
@@ -580,6 +589,114 @@ async function savePhoto() {
     addBtn.disabled    = false;
     addBtn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
   }
+}
+
+// ─────────────────────────────────────────────────────────
+// LOCATION — search
+// ─────────────────────────────────────────────────────────
+function selectSearch() {
+  document.getElementById('opt-search').classList.add('active');
+  document.getElementById('opt-gps').classList.remove('active');
+  document.getElementById('opt-pin').classList.remove('active');
+  document.getElementById('search-panel').classList.add('show');
+  // Clear any location set by GPS / pin
+  pendingLat = null;
+  pendingLng = null;
+  if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
+  checkReady();
+  setTimeout(function() {
+    document.getElementById('search-input').focus();
+  }, 50);
+}
+
+function clearSearch() {
+  document.getElementById('search-input').value = '';
+  document.getElementById('search-results').innerHTML = '';
+  document.getElementById('search-results').classList.remove('show');
+  pendingLat = null;
+  pendingLng = null;
+  if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
+  var status = document.getElementById('loc-status');
+  status.classList.remove('show', 'warn');
+  checkReady();
+}
+
+var searchDebounce;
+function onSearchInput() {
+  var q       = document.getElementById('search-input').value.trim();
+  var results = document.getElementById('search-results');
+  clearTimeout(searchDebounce);
+
+  if (!q) {
+    results.classList.remove('show');
+    pendingLat = null; pendingLng = null;
+    checkReady();
+    return;
+  }
+
+  results.innerHTML = '<div class="search-message">Searching…</div>';
+  results.classList.add('show');
+
+  searchDebounce = setTimeout(function() { doSearch(q); }, 420);
+}
+
+async function doSearch(q) {
+  var results = document.getElementById('search-results');
+  try {
+    var res = await fetch(
+      'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(q) +
+      '&format=json&limit=6&addressdetails=1',
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    var data = await res.json();
+
+    if (!data.length) {
+      results.innerHTML = '<div class="search-message">No results found.</div>';
+      return;
+    }
+
+    results.innerHTML = '';
+    data.forEach(function(place) {
+      var parts = place.display_name.split(', ');
+      var main  = parts.slice(0, 2).join(', ');
+      var sub   = parts.slice(2, 5).join(', ');
+
+      var item = document.createElement('div');
+      item.className = 'search-result-item';
+      item.innerHTML =
+        '<div class="result-main">' + main + '</div>' +
+        (sub ? '<div class="result-sub">' + sub + '</div>' : '');
+      item.onclick = function() {
+        pickPlace(parseFloat(place.lat), parseFloat(place.lon), place.display_name);
+      };
+      results.appendChild(item);
+    });
+  } catch(err) {
+    results.innerHTML = '<div class="search-message">Search failed. Check your connection.</div>';
+  }
+}
+
+function pickPlace(lat, lng, fullName) {
+  pendingLat = lat;
+  pendingLng = lng;
+
+  // Tidy the name for the input field
+  var shortName = fullName.split(', ').slice(0, 3).join(', ');
+  document.getElementById('search-input').value = shortName;
+  document.getElementById('search-results').classList.remove('show');
+
+  // Drop a preview pin and pan the map to it
+  if (tempPinMarker) map.removeLayer(tempPinMarker);
+  tempPinMarker = L.marker([lat, lng], {
+    icon: L.divIcon({
+      html: '<div style="width:18px;height:18px;background:#f59e0b;border:3px solid #fff;border-radius:50%;box-shadow:0 2px 8px rgba(0,0,0,.4)"></div>',
+      className: '', iconSize: [18, 18], iconAnchor: [9, 9]
+    })
+  }).addTo(map);
+  map.panTo([lat, lng], { animate: true, duration: 0.8 });
+
+  showStatus('Location set: ' + fullName.split(', ').slice(0, 2).join(', '), false);
+  checkReady();
 }
 
 // ─────────────────────────────────────────────────────────
