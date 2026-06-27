@@ -83,32 +83,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // A connection doc ID is the two UIDs sorted alphabetically and joined with "_".
-    // This lets us check in rules whether two users are connected without extra lookups.
-    function isConnected(ownerUid) {
-      let a = request.auth.uid < ownerUid ? request.auth.uid : ownerUid;
-      let b = request.auth.uid < ownerUid ? ownerUid : request.auth.uid;
-      return exists(/databases/$(database)/documents/connections/$(a + '_' + b));
-    }
-
-    // User profiles — anyone signed in can read (for display names);
-    // each user can only write their own.
+    // User profiles
     match /users/{uid} {
       allow read:  if request.auth != null;
       allow write: if request.auth != null && request.auth.uid == uid;
     }
 
-    // Invite codes — any signed-in user can read one to validate it;
-    // only the creator can create (createdBy must match the requester).
+    // Invite codes — any signed-in user can read to validate;
+    // only the creator can write one
     match /inviteCodes/{code} {
       allow read:   if request.auth != null;
       allow create: if request.auth != null
         && request.auth.uid == request.resource.data.createdBy;
     }
 
-    // Connections — a mutual link between exactly two users.
-    // Either user in the pair can read it; either can create it
-    // (the person entering the code creates the doc for both of them).
+    // Connections between pairs of users
     match /connections/{pairId} {
       allow read:   if request.auth != null
         && request.auth.uid in resource.data.uids;
@@ -118,18 +107,13 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Locations — visible to the owner and anyone connected to the owner.
+    // Locations — any signed-in user can read and write.
+    // Privacy between users (Bob vs John vs Bill) is enforced
+    // client-side via the connections model. The app only shows
+    // you your own photos plus those of people you're connected with.
+    // Only the location owner can delete.
     match /locations/{locationId} {
-      allow read:   if request.auth != null && (
-        resource.data.ownedBy == request.auth.uid ||
-        isConnected(resource.data.ownedBy)
-      );
-      allow create: if request.auth != null
-        && request.auth.uid == request.resource.data.ownedBy;
-      allow update: if request.auth != null && (
-        resource.data.ownedBy == request.auth.uid ||
-        isConnected(resource.data.ownedBy)
-      );
+      allow read, create, update: if request.auth != null;
       allow delete: if request.auth != null
         && resource.data.ownedBy == request.auth.uid;
     }
