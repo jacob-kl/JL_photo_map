@@ -747,7 +747,46 @@ body {
 }
 
 /* ─────────────────────────────────────────────────────────
-   Leaflet overrides
+   Map style switcher
+───────────────────────────────────────────────────────── */
+.map-style-switcher {
+  position: fixed;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  background: rgba(255, 255, 255, .92);
+  backdrop-filter: blur(10px);
+  border-radius: 100px;
+  padding: 4px;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, .15);
+  z-index: 800;
+  gap: 2px;
+}
+
+.ms-btn {
+  background: none;
+  border: none;
+  font-family: 'Inter', sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+  padding: 7px 14px;
+  border-radius: 100px;
+  cursor: pointer;
+  transition: background .15s, color .15s;
+  white-space: nowrap;
+}
+
+.ms-btn:hover { color: #0f172a; }
+
+.ms-btn.active {
+  background: #0f172a;
+  color: #fff;
+}
+
+/* ─────────────────────────────────────────────────────────
+   Leaflet zoom — push up above switcher
 ───────────────────────────────────────────────────────── */
 .leaflet-control-zoom             { margin-bottom: 90px !important; }
 .leaflet-popup-content-wrapper    { border-radius: 12px !important; }
