@@ -469,12 +469,15 @@ function maybeCloseViewer(e) {
 }
 
 // ─────────────────────────────────────────────────────────
-// LIGHTBOX — with navigation + delete
+// LIGHTBOX — navigation, zoom, save, delete
 // ─────────────────────────────────────────────────────────
+var lbZoom = false;
+
 function openLightbox(loc, index) {
   lbLoc    = loc;
-  lbPhotos = loc.photos.slice(); // local copy
+  lbPhotos = loc.photos.slice();
   lbIndex  = index;
+  lbZoom   = false;
   document.getElementById('lightbox').classList.add('open');
   renderLightbox();
 }
@@ -483,7 +486,17 @@ function renderLightbox() {
   var photo = lbPhotos[lbIndex];
   if (!photo) return;
 
-  document.getElementById('lightbox-img').src = photo.url;
+  // Reset zoom whenever we move to a different photo
+  lbZoom = false;
+  var img = document.getElementById('lightbox-img');
+  img.src = photo.url;
+  img.classList.remove('zoomed');
+  document.getElementById('lb-image-wrap').scrollTop  = 0;
+  document.getElementById('lb-image-wrap').scrollLeft = 0;
+
+  // Update zoom button label
+  document.getElementById('lb-zoom-label').textContent = 'Zoom';
+  document.getElementById('lb-zoom-btn').title = 'Zoom in';
 
   // Caption
   var parts = [];
@@ -497,12 +510,15 @@ function renderLightbox() {
   document.getElementById('lb-counter').textContent =
     (lbIndex + 1) + ' / ' + lbPhotos.length;
 
-  // Arrows
+  // Arrow visibility
   document.getElementById('lb-prev').classList.toggle('hidden', lbIndex === 0);
   document.getElementById('lb-next').classList.toggle('hidden', lbIndex === lbPhotos.length - 1);
 
-  // Delete — only visible if this is your photo
-  var delBtn = document.getElementById('lb-delete');
+  // Delete button — always reset text/state here so it's never stuck on "Deleting…"
+  var delBtn   = document.getElementById('lb-delete');
+  var delLabel = document.getElementById('lb-delete-label');
+  delBtn.disabled      = false;
+  delLabel.textContent = 'Delete';
   delBtn.style.display = (currentUser && photo.uploadedBy === currentUser.uid) ? 'flex' : 'none';
 }
 
@@ -519,27 +535,92 @@ function lightboxBackdropClick(e) {
 }
 
 function closeLightbox() {
+  lbZoom = false;
+  var img = document.getElementById('lightbox-img');
+  img.classList.remove('zoomed');
   document.getElementById('lightbox').classList.remove('open');
 }
 
+// ── Zoom ──────────────────────────────────────────────────
+function toggleZoom(e) {
+  e.stopPropagation();
+  lbZoom = !lbZoom;
+
+  var img   = document.getElementById('lightbox-img');
+  var wrap  = document.getElementById('lb-image-wrap');
+  var label = document.getElementById('lb-zoom-label');
+  var btn   = document.getElementById('lb-zoom-btn');
+
+  img.classList.toggle('zoomed', lbZoom);
+  label.textContent = lbZoom ? 'Zoom out' : 'Zoom';
+  btn.title         = lbZoom ? 'Zoom out' : 'Zoom in';
+
+  // When zooming in, center the scroll position
+  if (lbZoom) {
+    setTimeout(function() {
+      wrap.scrollLeft = (wrap.scrollWidth  - wrap.clientWidth)  / 2;
+      wrap.scrollTop  = (wrap.scrollHeight - wrap.clientHeight) / 2;
+    }, 260); // after transition ends
+  } else {
+    wrap.scrollTop  = 0;
+    wrap.scrollLeft = 0;
+  }
+}
+
+// ── Save to device ────────────────────────────────────────
+async function downloadCurrentPhoto() {
+  var photo = lbPhotos[lbIndex];
+  if (!photo) return;
+
+  var saveBtn = document.querySelector('.lb-save');
+  saveBtn.textContent = 'Saving…';
+  saveBtn.disabled    = true;
+
+  try {
+    // Fetch as blob so the download works cross-origin (Cloudinary)
+    var res  = await fetch(photo.url);
+    var blob = await res.blob();
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href   = url;
+    // Use the location name + index as the filename
+    a.download = (lbLoc.name || 'photo').replace(/[^a-z0-9]/gi, '-').toLowerCase() +
+                 '-' + (lbIndex + 1) + '.' + (blob.type.split('/')[1] || 'jpg');
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast('Photo saved!');
+  } catch(err) {
+    // Fallback: open in new tab so user can long-press to save on mobile
+    window.open(photo.url, '_blank');
+    toast('Opening photo — long-press to save.');
+  } finally {
+    // Restore save button
+    var svgPath = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>';
+    saveBtn.innerHTML = svgPath + ' Save';
+    saveBtn.disabled  = false;
+  }
+}
+
+// ── Delete ────────────────────────────────────────────────
 async function deleteCurrentPhoto() {
   var photo = lbPhotos[lbIndex];
   if (!photo || !currentUser || photo.uploadedBy !== currentUser.uid) return;
   if (!confirm('Delete this photo?')) return;
 
-  var delBtn = document.getElementById('lb-delete');
-  delBtn.textContent = 'Deleting…'; delBtn.disabled = true;
+  var delBtn   = document.getElementById('lb-delete');
+  var delLabel = document.getElementById('lb-delete-label');
+  delLabel.textContent = 'Deleting…';
+  delBtn.disabled      = true;
 
   try {
-    // Fetch fresh copy so we match exactly what Firestore has
     var locDoc = await db.collection('locations').doc(lbLoc.id).get();
     var fresh  = (locDoc.data().photos || []).filter(function(p) {
       return !(p.url === photo.url && p.createdAt === photo.createdAt && p.uploadedBy === photo.uploadedBy);
     });
-
     await db.collection('locations').doc(lbLoc.id).update({ photos: fresh });
 
-    // Update local lightbox array
     lbPhotos.splice(lbIndex, 1);
 
     if (lbPhotos.length === 0) {
@@ -547,13 +628,14 @@ async function deleteCurrentPhoto() {
       document.getElementById('viewer-overlay').classList.remove('open');
     } else {
       if (lbIndex >= lbPhotos.length) lbIndex = lbPhotos.length - 1;
-      renderLightbox();
+      renderLightbox(); // ← this resets the delete button label and disabled state
     }
     toast('Photo deleted.');
   } catch(err) {
     console.error(err);
     toast('Delete failed. Try again.');
-    delBtn.textContent = 'Delete'; delBtn.disabled = false;
+    delLabel.textContent = 'Delete';  // reset manually on error too
+    delBtn.disabled      = false;
   }
 }
 
@@ -883,6 +965,11 @@ function toast(msg) {
 document.addEventListener('keydown', function(e) {
   var lbOpen = document.getElementById('lightbox').classList.contains('open');
   if (lbOpen) {
+    // When zoomed, let arrow keys scroll the image instead of navigating
+    if (lbZoom) {
+      if (e.key === 'Escape') { toggleZoom({ stopPropagation: function(){} }); }
+      return;
+    }
     if (e.key === 'ArrowLeft')  { lightboxNav(-1, e); return; }
     if (e.key === 'ArrowRight') { lightboxNav(1,  e); return; }
     if (e.key === 'Escape')     { closeLightbox(); return; }
