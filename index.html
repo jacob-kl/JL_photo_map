@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Our Photo Map</title>
+  <title>Kline of Sight</title>
 
   <!-- Leaflet -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
@@ -21,10 +21,13 @@
   <!-- Header -->
   <div class="app-header">
     <div class="logo-icon">📍</div>
-    <span>Our Photo Map</span>
+    <span>Kline of Sight</span>
     <div class="header-divider"></div>
     <button id="auth-btn" class="auth-btn" onclick="handleAuthClick()">Sign in</button>
   </div>
+
+  <!-- Uploader filter (hidden until 2+ people have uploaded) -->
+  <div id="filter-row" class="filter-row"></div>
 
   <!-- Map -->
   <div id="map"></div>
