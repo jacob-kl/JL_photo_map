@@ -5,37 +5,68 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Kline of Sight</title>
 
-  <!-- Leaflet -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.css"/>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/MarkerCluster.Default.css"/>
-
-  <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-
-  <!-- App styles -->
   <link rel="stylesheet" href="style.css"/>
 </head>
 <body>
 
-  <!-- Header -->
+  <!-- ── Family gate (shown until the user has joined a family) ── -->
+  <div id="family-gate" class="family-gate">
+    <div class="gate-card">
+      <div class="gate-logo">📍</div>
+      <h1 class="gate-title">Kline of Sight</h1>
+      <p class="gate-greeting">Welcome, <strong id="gate-name"></strong>.</p>
+
+      <div class="gate-section">
+        <p class="gate-label">Have an invite code?</p>
+        <input type="text" id="code-input" class="code-input"
+               placeholder="XXXXXX" maxlength="6"
+               oninput="this.value = this.value.replace(/[^A-Za-z0-9]/g,'').toUpperCase()"
+               onkeydown="if(event.key==='Enter') joinWithCode()"/>
+        <div id="code-error" class="code-error"></div>
+        <button class="btn-gate-primary" id="btn-join" onclick="joinWithCode()">
+          Join Family
+        </button>
+      </div>
+
+      <div class="gate-divider"><span>or</span></div>
+
+      <div class="gate-section">
+        <p class="gate-label">Starting fresh?</p>
+        <button class="btn-gate-secondary" id="btn-create" onclick="createFamily()">
+          Set up a new family map
+        </button>
+        <p class="gate-hint">Only use this if you're the first person setting up — not if you've been invited.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Header ── -->
   <div class="app-header">
     <div class="logo-icon">📍</div>
     <span>Kline of Sight</span>
     <div class="header-divider"></div>
+    <button id="invite-btn" class="header-icon-btn" onclick="openInvitePanel()"
+            title="Invite family" style="display:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+           stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/>
+        <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/>
+      </svg>
+    </button>
     <button id="auth-btn" class="auth-btn" onclick="handleAuthClick()">Sign in</button>
   </div>
 
-  <!-- Uploader filter (hidden until 2+ people have uploaded) -->
+  <!-- ── Uploader filter ── -->
   <div id="filter-row" class="filter-row"></div>
 
-  <!-- Map -->
   <div id="map"></div>
 
-  <!-- Pin mode banner -->
   <div id="pin-banner">📍 Tap anywhere on the map to place your photo</div>
 
-  <!-- FAB: add photo -->
   <button id="fab" onclick="handleFabClick()" title="Add photo">
     <svg width="26" height="26" viewBox="0 0 24 24" fill="none"
          stroke="#fff" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -63,8 +94,8 @@
       <div class="drop-zone" id="drop-zone" onclick="document.getElementById('file-input').click()">
         <div id="dz-content">
           <div class="dz-icon">📷</div>
-          <div class="dz-main">Choose a photo</div>
-          <div class="dz-sub">Tap here or drag and drop</div>
+          <div class="dz-main">Choose photos</div>
+          <div class="dz-sub">Tap here • select one or many</div>
         </div>
       </div>
       <input type="file" id="file-input" accept="image/*" multiple onchange="handleFile(event)"/>
@@ -90,7 +121,6 @@
         </div>
       </div>
 
-      <!-- Search panel — shown when Search option is active -->
       <div id="search-panel">
         <div class="search-input-wrap">
           <input type="text" id="search-input" class="search-field"
@@ -103,36 +133,40 @@
 
       <div class="loc-status" id="loc-status"></div>
 
-      <button class="btn-add" id="add-btn" disabled onclick="savePhoto()">
-        Add to Map
+      <button class="btn-add" id="add-btn" disabled onclick="savePhoto()">Add to Map</button>
+    </div>
+  </div>
+
+  <!-- ── Invite panel ── -->
+  <div class="overlay" id="invite-overlay" onclick="maybeCloseInvite(event)">
+    <div class="sheet">
+      <div class="sheet-handle"></div>
+      <div class="upload-title">Invite Family</div>
+      <p class="invite-desc">Share this code. Anyone who enters it can view and add photos — for 24 hours.</p>
+      <div id="invite-code-display" class="invite-code-display">
+        <div class="code-generating">Generating…</div>
+      </div>
+      <button class="btn-add" style="margin-top:8px" onclick="generateAndShowCode()">
+        New Code
       </button>
     </div>
   </div>
 
-  <!-- Lightbox -->
+  <!-- ── Lightbox ── -->
   <div id="lightbox" onclick="closeLightbox()">
     <button id="lightbox-close" onclick="closeLightbox()">×</button>
     <img id="lightbox-img" src="" alt=""/>
     <div id="lightbox-caption"></div>
   </div>
 
-  <!-- Toast -->
   <div id="toast"></div>
 
-  <!-- Leaflet -->
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.markercluster/1.5.3/leaflet.markercluster.min.js"></script>
-
-  <!-- Firebase v12 compat (no build step needed) -->
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-auth-compat.js"></script>
-
-  <!-- Config (fill in your values before deploying) -->
   <script src="config.js"></script>
-
-  <!-- App logic -->
   <script src="app.js"></script>
-
 </body>
 </html>
