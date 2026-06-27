@@ -521,6 +521,97 @@ body {
 .loc-opt .lo-name { font-size: 13px; font-weight: 700; color: #0f172a; }
 .loc-opt .lo-sub  { font-size: 11px; color: #94a3b8; margin-top: 2px; }
 
+/* Search option — spans both columns, horizontal layout */
+.loc-opt-full {
+  grid-column: 1 / -1;
+  flex-direction: row;
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  text-align: left;
+  padding: 12px 16px;
+}
+
+.loc-opt-full .lo-icon  { font-size: 20px; margin-bottom: 0; }
+.loc-opt-full .lo-name  { margin-bottom: 1px; }
+
+/* ── Search panel ── */
+#search-panel {
+  display: none;
+  margin-bottom: 12px;
+}
+#search-panel.show { display: block; }
+
+.search-input-wrap {
+  position: relative;
+  margin-bottom: 6px;
+}
+
+.search-field {
+  width: 100%;
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 12px 38px 12px 14px;
+  font-size: 14px;
+  font-family: inherit;
+  color: #0f172a;
+  outline: none;
+  transition: border-color .15s;
+}
+.search-field:focus       { border-color: #f59e0b; }
+.search-field::placeholder { color: #94a3b8; }
+
+.search-clear-btn {
+  position: absolute;
+  top: 50%;
+  right: 10px;
+  transform: translateY(-50%);
+  background: none;
+  border: none;
+  color: #94a3b8;
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 4px;
+  transition: color .15s;
+}
+.search-clear-btn:hover { color: #475569; }
+
+.search-results {
+  border: 1.5px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  display: none;
+}
+.search-results.show { display: block; }
+
+.search-result-item {
+  padding: 11px 14px;
+  cursor: pointer;
+  border-bottom: 1px solid #f1f5f9;
+  transition: background .12s;
+}
+.search-result-item:last-child { border-bottom: none; }
+.search-result-item:hover      { background: #fffbeb; }
+
+.result-main {
+  font-size: 13px;
+  font-weight: 600;
+  color: #0f172a;
+  margin-bottom: 2px;
+}
+.result-sub {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.search-message {
+  padding: 14px;
+  text-align: center;
+  color: #94a3b8;
+  font-size: 13px;
+}
+
 .loc-status {
   background: #f0fdf4;
   border: 1.5px solid #bbf7d0;
