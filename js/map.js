@@ -2,18 +2,19 @@
 // Map
 //
 // Manages the 3D globe (globe.gl) and 2D flat map (Leaflet).
-// Starts in globe mode. Clicking a location on the globe
-// transitions to the flat map at that location.
+// Starts in globe mode. Zooming in far enough, or clicking a
+// pin, transitions to the flat Atlas map.
 //
-// Reads:  locations, connectedUIDs, currentUser, selectedUids, allUploaders
-// Writes: map, clusterGroup, activeStyle, selectedUids, allUploaders, globeActive
+// Reads:  locations, connectedUIDs, currentUser, selectedUids
+// Writes: map, clusterGroup, activeStyle, selectedUids,
+//         allUploaders, globeActive, globeInstance
 // ─────────────────────────────────────────────────────────
-let selectedUids = new Set();
-let allUploaders = new Map();
-let globeActive  = true;
+let selectedUids  = new Set();
+let allUploaders  = new Map();
+let globeActive   = true;
 let globeInstance = null;
 
-// ── Flat map init ─────────────────────────────────────────
+// ── Flat map ──────────────────────────────────────────────
 const map = L.map('map', { center: [40, -96], zoom: 3, zoomControl: false });
 L.control.zoom({ position: 'bottomleft' }).addTo(map);
 
@@ -35,9 +36,9 @@ var tileSets = {
 var activeStyle = 'topo';
 tileSets[activeStyle].addTo(map);
 
-// ── Globe ────────────────────────────────────────────────
+// ── Globe (globe.gl) ──────────────────────────────────────
 function initGlobe() {
-  if (!window.Globe) return; // library didn't load (e.g. ad-blocker)
+  if (!window.Globe) return; // blocked or not loaded
 
   var container = document.getElementById('globe-container');
 
@@ -48,108 +49,123 @@ function initGlobe() {
     .atmosphereAltitude(0.18)
     .globeImageUrl('https://unpkg.com/three-globe/example/img/earth-blue-marble.jpg')
     .bumpImageUrl('https://unpkg.com/three-globe/example/img/earth-topology.png')
-    .pointsData([])
-    .pointLat(function(d) { return d.lat; })
-    .pointLng(function(d) { return d.lng; })
-    .pointColor(function() { return '#f59e0b'; })
-    .pointRadius(0.4)
-    .pointAltitude(0.015)
-    .pointLabel(function(d) {
-      return '<div style="background:rgba(0,0,0,.75);color:#fff;padding:5px 10px;border-radius:8px;font-size:13px;font-family:Inter,sans-serif">' +
-             (d.eventName ? '<span style="color:#fbbf24">' + d.eventName + '</span><br>' : '') +
-             d.name + '<br><span style="opacity:.6">' + d.count + ' photo' + (d.count !== 1 ? 's' : '') + '</span>' +
-             '</div>';
-    })
-    .onPointClick(function(point) {
-      enterFlatMap(point.lat, point.lng);
-      // Open the viewer for this location after the transition
-      setTimeout(function() {
-        var loc = locations.find(function(l) {
-          return Math.abs(l.lat - point.lat) < 0.001 && Math.abs(l.lng - point.lng) < 0.001;
-        });
-        if (loc) openViewer(loc);
-      }, 600);
+    // Use HTML markers so we get real pin shapes instead of geometric primitives
+    .htmlElementsData([])
+    .htmlLat(function(d) { return d.lat; })
+    .htmlLng(function(d) { return d.lng; })
+    .htmlAltitude(0.01)
+    .htmlElement(function(d) {
+      var el = document.createElement('div');
+      el.style.cssText = 'cursor:pointer;transform:translate(-50%,-100%);user-select:none;' +
+                         'filter:drop-shadow(0 2px 4px rgba(0,0,0,0.5))';
+      el.innerHTML =
+        '<svg width="22" height="30" viewBox="0 0 22 30" fill="none" xmlns="http://www.w3.org/2000/svg">' +
+          '<path d="M11 0C4.93 0 0 4.93 0 11c0 8.25 11 19 11 19s11-10.75 11-19C22 4.93 17.07 0 11 0z" fill="#ef4444"/>' +
+          '<circle cx="11" cy="11" r="4.5" fill="white"/>' +
+        '</svg>';
+      el.title = d.name + (d.count ? ' · ' + d.count + ' photo' + (d.count !== 1 ? 's' : '') : '');
+      el.addEventListener('click', function() {
+        enterFlatMap(d.lat, d.lng, true);
+        // Open the viewer once the map is visible
+        setTimeout(function() {
+          var match = locations.find(function(l) {
+            return Math.abs(l.lat - d.lat) < 0.001 && Math.abs(l.lng - d.lng) < 0.001;
+          });
+          if (match) openViewer(match);
+        }, 650);
+      });
+      return el;
     })
     (container);
 
-  // Start looking at North America
   globeInstance.pointOfView({ lat: 38, lng: -98, altitude: 2 });
-
-  // Gentle auto-rotation; stops when user grabs
   globeInstance.controls().autoRotate      = true;
   globeInstance.controls().autoRotateSpeed = 0.25;
+
+  // Stop auto-rotation when user interacts
   container.addEventListener('pointerdown', function() {
     if (globeInstance) globeInstance.controls().autoRotate = false;
+  }, { passive: true });
+
+  // Auto-transition to flat map when zoomed in close enough
+  globeInstance.onZoom(function(pov) {
+    if (pov.altitude < 0.25 && globeActive) {
+      enterFlatMap(pov.lat, pov.lng, false); // false = don't reset to topo (already close)
+    }
   });
 }
 
 function updateGlobeMarkers() {
   if (!globeInstance) return;
-  globeInstance.pointsData(locations.map(function(loc) {
+  globeInstance.htmlElementsData(locations.map(function(loc) {
     return {
-      lat:       loc.lat,
-      lng:       loc.lng,
-      name:      loc.name,
-      count:     loc.photos ? loc.photos.length : 0,
-      eventName: loc.eventName || null
+      lat:   loc.lat,
+      lng:   loc.lng,
+      name:  loc.name,
+      count: loc.photos ? loc.photos.length : 0
     };
   }));
 }
 
 // ── View switching ────────────────────────────────────────
-function enterFlatMap(lat, lng) {
+// resetStyle: when true (user clicked a pin) switch to Atlas.
+//             when false (auto-transition on zoom) keep whatever was set.
+function enterFlatMap(lat, lng, resetStyle) {
+  if (!globeActive) return; // already in flat mode
   globeActive = false;
 
   document.getElementById('globe-container').classList.add('hidden');
   document.getElementById('map').classList.add('visible');
 
-  // Reflect in the style switcher
+  // Default to Atlas when coming from globe — it's the richest cartographic view
+  if (resetStyle !== false) {
+    map.removeLayer(tileSets[activeStyle]);
+    activeStyle = 'topo';
+    tileSets['topo'].addTo(map);
+  }
+
+  // Sync the switcher buttons
   document.querySelectorAll('.ms-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.style === activeStyle);
   });
 
-  // Let Leaflet know the container is now visible and fly to the location
   setTimeout(function() {
     map.invalidateSize();
-    if (lat !== undefined && lng !== undefined) {
-      map.setView([lat, lng], 8);
-    }
+    if (lat !== undefined && lng !== undefined) map.setView([lat, lng], 8);
   }, 50);
 }
 
 function enterGlobe() {
   globeActive = true;
-
   document.getElementById('map').classList.remove('visible');
   document.getElementById('globe-container').classList.remove('hidden');
 
   document.querySelectorAll('.ms-btn').forEach(function(b) {
     b.classList.remove('active');
   });
-  var globeBtn = document.querySelector('.ms-btn[data-style="globe"]');
-  if (globeBtn) globeBtn.classList.add('active');
+  var gb = document.querySelector('.ms-btn[data-style="globe"]');
+  if (gb) gb.classList.add('active');
 
-  // Restart auto-rotate if it was stopped
-  if (globeInstance) globeInstance.controls().autoRotate = true;
-
-  updateGlobeMarkers();
+  if (globeInstance) {
+    globeInstance.controls().autoRotate = true;
+    updateGlobeMarkers();
+  }
 }
 
 function setMapStyle(style) {
   if (style === 'globe') { enterGlobe(); return; }
-  if (globeActive) enterFlatMap();
+  if (globeActive) enterFlatMap(undefined, undefined, false);
 
   if (style === activeStyle) return;
   map.removeLayer(tileSets[activeStyle]);
   tileSets[style].addTo(map);
   activeStyle = style;
-
   document.querySelectorAll('.ms-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.style === style);
   });
 }
 
-// ── Marker cluster ───────────────────────────────────────
+// ── Marker cluster ────────────────────────────────────────
 const clusterGroup = L.markerClusterGroup({
   maxClusterRadius: 70,
   showCoverageOnHover: false,
@@ -180,7 +196,6 @@ function buildIcon(loc) {
   });
 }
 
-// ── Render markers ───────────────────────────────────────
 function getFilteredPhotos(loc) {
   if (!loc.photos) return [];
   if (selectedUids.size === 0) return loc.photos;
@@ -199,10 +214,10 @@ function renderMarkers() {
     clusterGroup.addLayer(m);
   });
   map.addLayer(clusterGroup);
-  updateGlobeMarkers(); // keep globe in sync
+  updateGlobeMarkers();
 }
 
-// ── Uploader filter bar ──────────────────────────────────
+// ── Uploader filter bar ───────────────────────────────────
 function buildUploaderMap() {
   var up = new Map();
   locations.forEach(function(loc) {
@@ -225,6 +240,7 @@ function renderFilter() {
   if (allUploaders.size < 2) { row.style.display = 'none'; return; }
 
   row.style.display = 'flex';
+  // Keep only uploader buttons (remove event controls before re-adding uploaders)
   row.innerHTML = '<span class="filter-row-label">Show</span>';
 
   allUploaders.forEach(function(u, uid) {
@@ -248,19 +264,13 @@ function toggleFilter(uid) {
     selectedUids.add(uid);
     if (selectedUids.size === allUploaders.size) selectedUids = new Set();
   }
-  renderFilter();
-  renderMarkers();
+  renderFilter(); renderEventFilter(); renderMarkers();
 }
 
-// ── Init globe after page loads ──────────────────────────
-// Brief delay so Leaflet can initialize with a visible container first,
-// then globe takes over as the default view.
+// ── Init globe after page loads ───────────────────────────
 window.addEventListener('load', function() {
   setTimeout(function() {
     initGlobe();
-    if (globeInstance) {
-      enterGlobe(); // Globe as default view
-    }
-    // If globe.gl didn't load (ad blocker etc.), fall back to flat map
+    if (globeInstance) enterGlobe();
   }, 400);
 });

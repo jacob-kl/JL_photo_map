@@ -1,10 +1,6 @@
 // ─────────────────────────────────────────────────────────
 // Upload
 //
-// Handles: upload modal UI, file selection, location methods
-//          (GPS / pin drop / place search), Cloudinary upload,
-//          and writing the final location+photo to Firestore.
-//
 // Reads:  db, currentUser, map, locations (connections.js)
 // Writes: pendingLat, pendingLng, selectedFiles, selectedURLs,
 //         pinMode, tempPinMarker
@@ -18,7 +14,6 @@ let tempPinMarker = null;
 
 // ── Open / close / reset ─────────────────────────────────
 function openUpload() {
-  // Switch to flat map if globe is showing
   if (typeof globeActive !== 'undefined' && globeActive) enterFlatMap();
   resetUpload();
   renderEventPicker();
@@ -71,13 +66,9 @@ function handleFile(e) {
   selectedFiles = files;
   selectedURLs  = new Array(files.length);
   var pending   = files.length;
-
   files.forEach(function(file, i) {
     var r = new FileReader();
-    r.onload = function(ev) {
-      selectedURLs[i] = ev.target.result;
-      if (!--pending) updateDropZonePreview();
-    };
+    r.onload = function(ev) { selectedURLs[i] = ev.target.result; if (!--pending) updateDropZonePreview(); };
     r.readAsDataURL(file);
   });
 }
@@ -85,7 +76,6 @@ function handleFile(e) {
 function updateDropZonePreview() {
   var n = selectedFiles.length;
   document.getElementById('drop-zone').classList.add('has-file');
-
   if (n === 1) {
     document.getElementById('dz-content').innerHTML =
       '<div class="dz-preview"><img src="' + selectedURLs[0] + '"/></div>' +
@@ -106,7 +96,6 @@ function updateDropZonePreview() {
   checkReady();
 }
 
-// Drag-and-drop support
 var dropZone = document.getElementById('drop-zone');
 dropZone.addEventListener('dragover',  function(e) { e.preventDefault(); dropZone.style.borderColor = '#f59e0b'; });
 dropZone.addEventListener('dragleave', function()  { dropZone.style.borderColor = ''; });
@@ -122,15 +111,12 @@ function useGPS() {
   ['opt-pin', 'opt-search'].forEach(function(id) { document.getElementById(id).classList.remove('active'); });
   document.getElementById('search-panel').classList.remove('show');
   showStatus('Getting your location…', false);
-
   if (!navigator.geolocation) { showStatus('GPS not available in this browser.', true); return; }
-
   navigator.geolocation.getCurrentPosition(
     function(pos) {
       pendingLat = pos.coords.latitude; pendingLng = pos.coords.longitude;
       showStatus('Location found: ' + pendingLat.toFixed(4) + ', ' + pendingLng.toFixed(4), false);
-      checkReady();
-      renderEventPicker(); // refresh nearby events
+      checkReady(); renderEventPicker();
     },
     function() {
       showStatus('GPS permission denied. Try dropping a pin instead.', true);
@@ -168,8 +154,7 @@ function onPinClick(e) {
   setTimeout(function() {
     document.getElementById('upload-overlay').classList.add('open');
     showStatus('Pin placed: ' + pendingLat.toFixed(4) + ', ' + pendingLng.toFixed(4), false);
-    checkReady();
-    renderEventPicker(); // refresh nearby events
+    checkReady(); renderEventPicker();
   }, 120);
 }
 
@@ -188,7 +173,7 @@ function selectSearch() {
   document.getElementById('search-panel').classList.add('show');
   pendingLat = null; pendingLng = null;
   if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
-  checkReady();
+  checkReady(); renderEventPicker();
   setTimeout(function() { document.getElementById('search-input').focus(); }, 50);
 }
 
@@ -199,8 +184,7 @@ function clearSearch() {
   pendingLat = null; pendingLng = null;
   if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
   document.getElementById('loc-status').classList.remove('show', 'warn');
-  checkReady();
-  renderEventPicker(); // reset nearby events
+  checkReady(); renderEventPicker();
 }
 
 var searchDebounce;
@@ -253,15 +237,12 @@ function pickPlace(lat, lng, fullName) {
   }).addTo(map);
   map.panTo([lat, lng], { animate: true, duration: 0.8 });
   showStatus('Location set: ' + fullName.split(', ').slice(0,2).join(', '), false);
-  checkReady();
-  renderEventPicker(); // refresh nearby events
+  checkReady(); renderEventPicker();
 }
 
-// ── Helpers ──────────────────────────────────────────────
 function showStatus(msg, warn) {
   var el = document.getElementById('loc-status');
-  el.textContent = msg; el.classList.add('show');
-  el.classList.toggle('warn', warn);
+  el.textContent = msg; el.classList.add('show'); el.classList.toggle('warn', warn);
 }
 
 function checkReady() {
@@ -272,19 +253,19 @@ function checkReady() {
 }
 
 // ── Cloudinary upload ────────────────────────────────────
+// f_auto converts HEIC/HEIF → WebP or JPEG based on the browser.
+// Without this, photos from iPhones appear blank on non-Safari browsers.
 async function uploadToCloudinary(file) {
   var form = new FormData();
-  form.append('file',           file);
-  form.append('upload_preset',  CLOUDINARY_UPLOAD_PRESET);
-  form.append('folder',         'kline-of-sight');
+  form.append('file',          file);
+  form.append('upload_preset', CLOUDINARY_UPLOAD_PRESET);
+  form.append('folder',        'kline-of-sight');
   var res = await fetch(
     'https://api.cloudinary.com/v1_1/' + CLOUDINARY_CLOUD_NAME + '/image/upload',
     { method: 'POST', body: form }
   );
-  if (!res.ok) throw new Error('Cloudinary error: ' + res.status);
+  if (!res.ok) throw new Error('Cloudinary ' + res.status);
   var data = await res.json();
-  // f_auto converts HEIC/HEIF to WebP or JPEG based on the browser —
-  // without this, iPhones uploading HEIC files show blank on non-Safari browsers.
   return data.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
 }
 
@@ -294,38 +275,45 @@ async function savePhoto() {
 
   var n   = selectedFiles.length;
   var btn = document.getElementById('add-btn');
-  btn.disabled    = true;
-  btn.textContent = n > 1 ? 'Uploading 0 of ' + n + '…' : 'Uploading…';
+  btn.disabled = true; btn.textContent = n > 1 ? 'Uploading 0 of ' + n + '…' : 'Uploading…';
 
-  // 1. Resolve selected event — non-fatal if it fails
+  // 1. Resolve event — non-fatal
   var eventInfo = null;
   try {
     eventInfo = await resolveSelectedEvent();
   } catch(evtErr) {
     if (evtErr.message === 'invalid-date') {
-      btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
-      return;
+      btn.disabled = false; btn.textContent = 'Add to Map'; return;
     }
-    console.warn('Event error (continuing without event):', evtErr);
+    console.warn('Event error (skipping event tag):', evtErr);
   }
 
-  // 2. Upload images to Cloudinary
-  var photoUrls;
-  try {
-    var uploaded = 0;
-    photoUrls = await Promise.all(selectedFiles.map(async function(file) {
+  // 2. Upload to Cloudinary — per-file error handling so one bad file
+  //    doesn't kill the entire batch.
+  var uploaded = 0;
+  var skipped  = 0;
+  var photoUrls = await Promise.all(selectedFiles.map(async function(file) {
+    try {
       var url = await uploadToCloudinary(file);
-      if (n > 1) btn.textContent = 'Uploading ' + (++uploaded) + ' of ' + n + '…';
+      uploaded++;
+      if (n > 1) btn.textContent = 'Uploading ' + uploaded + ' of ' + n + '…';
       return url;
-    }));
-  } catch(cloudErr) {
-    console.error('Cloudinary upload failed:', cloudErr);
-    toast('Photo upload failed. Check your Cloudinary config.');
+    } catch(fileErr) {
+      skipped++;
+      console.warn('Skipped file:', file.name, fileErr.message);
+      if (n > 1) btn.textContent = 'Uploading ' + (uploaded + skipped) + ' of ' + n + '…';
+      return null; // null entries are filtered out below
+    }
+  }));
+
+  photoUrls = photoUrls.filter(Boolean);
+
+  if (!photoUrls.length) {
+    toast('All uploads failed. Check file sizes and your Cloudinary config.');
     btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
     return;
   }
-
-  var caption = document.getElementById('caption').value.trim();
+  if (skipped > 0) toast(skipped + ' file' + (skipped > 1 ? 's' : '') + ' skipped (too large or unsupported format).');
 
   // 3. Reverse-geocode
   var locName = pendingLat.toFixed(3) + ', ' + pendingLng.toFixed(3);
@@ -345,7 +333,7 @@ async function savePhoto() {
   var photoEntries = photoUrls.map(function(url) {
     return {
       url:           url,
-      caption:       caption,
+      caption:       document.getElementById('caption').value.trim(),
       uploadedBy:    currentUser.uid,
       uploaderName:  currentUser.displayName || 'Someone',
       uploaderPhoto: currentUser.photoURL    || null,
@@ -353,12 +341,12 @@ async function savePhoto() {
     };
   });
 
-  // 5. Merge into nearby location (same event only) or create new
-  var MERGE_RADIUS_M  = 3000;
-  var myEventId       = eventInfo ? eventInfo.id : null;
+  // 5. Merge into nearby same-event location or create new
+  var MERGE_RADIUS_M = 3000;
+  var myEventId = eventInfo ? eventInfo.id : null;
   var nearby = locations.find(function(l) {
-    var sameEvent = (l.eventId || null) === myEventId;
-    return sameEvent && map.distance([l.lat, l.lng], [pendingLat, pendingLng]) < MERGE_RADIUS_M;
+    return (l.eventId || null) === myEventId &&
+           map.distance([l.lat, l.lng], [pendingLat, pendingLng]) < MERGE_RADIUS_M;
   });
 
   try {
@@ -382,7 +370,7 @@ async function savePhoto() {
     }
   } catch(dbErr) {
     console.error('Firestore write failed:', dbErr);
-    toast('Photos uploaded to Cloudinary but map save failed. Check your Firestore rules (README step 1.4).');
+    toast('Photos uploaded but map save failed. Check your Firestore rules (README step 1.4).');
     btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
     return;
   }
@@ -391,5 +379,5 @@ async function savePhoto() {
   if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
   resetUpload();
   map.flyTo([pendingLat, pendingLng], Math.max(map.getZoom(), 9), { duration: 1.4 });
-  toast(n > 1 ? n + ' photos added!' : 'Photo added!');
+  toast(photoUrls.length + ' photo' + (photoUrls.length > 1 ? 's' : '') + ' added!');
 }
