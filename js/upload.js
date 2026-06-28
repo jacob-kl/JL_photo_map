@@ -18,6 +18,8 @@ let tempPinMarker = null;
 
 // ── Open / close / reset ─────────────────────────────────
 function openUpload() {
+  // Switch to flat map if globe is showing
+  if (typeof globeActive !== 'undefined' && globeActive) enterFlatMap();
   resetUpload();
   renderEventPicker();
   document.getElementById('upload-overlay').classList.add('open');
@@ -128,6 +130,7 @@ function useGPS() {
       pendingLat = pos.coords.latitude; pendingLng = pos.coords.longitude;
       showStatus('Location found: ' + pendingLat.toFixed(4) + ', ' + pendingLng.toFixed(4), false);
       checkReady();
+      renderEventPicker(); // refresh nearby events
     },
     function() {
       showStatus('GPS permission denied. Try dropping a pin instead.', true);
@@ -166,6 +169,7 @@ function onPinClick(e) {
     document.getElementById('upload-overlay').classList.add('open');
     showStatus('Pin placed: ' + pendingLat.toFixed(4) + ', ' + pendingLng.toFixed(4), false);
     checkReady();
+    renderEventPicker(); // refresh nearby events
   }, 120);
 }
 
@@ -196,6 +200,7 @@ function clearSearch() {
   if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
   document.getElementById('loc-status').classList.remove('show', 'warn');
   checkReady();
+  renderEventPicker(); // reset nearby events
 }
 
 var searchDebounce;
@@ -249,6 +254,7 @@ function pickPlace(lat, lng, fullName) {
   map.panTo([lat, lng], { animate: true, duration: 0.8 });
   showStatus('Location set: ' + fullName.split(', ').slice(0,2).join(', '), false);
   checkReady();
+  renderEventPicker(); // refresh nearby events
 }
 
 // ── Helpers ──────────────────────────────────────────────
@@ -276,7 +282,10 @@ async function uploadToCloudinary(file) {
     { method: 'POST', body: form }
   );
   if (!res.ok) throw new Error('Cloudinary error: ' + res.status);
-  return (await res.json()).secure_url;
+  var data = await res.json();
+  // f_auto converts HEIC/HEIF to WebP or JPEG based on the browser —
+  // without this, iPhones uploading HEIC files show blank on non-Safari browsers.
+  return data.secure_url.replace('/upload/', '/upload/f_auto,q_auto/');
 }
 
 // ── Save to Firestore ────────────────────────────────────
@@ -288,55 +297,71 @@ async function savePhoto() {
   btn.disabled    = true;
   btn.textContent = n > 1 ? 'Uploading 0 of ' + n + '…' : 'Uploading…';
 
+  // 1. Resolve selected event — non-fatal if it fails
+  var eventInfo = null;
   try {
-    // 1. Resolve selected event (may create a new Firestore event doc)
-    var eventInfo = await resolveSelectedEvent(); // null = Day to Day
+    eventInfo = await resolveSelectedEvent();
+  } catch(evtErr) {
+    if (evtErr.message === 'invalid-date') {
+      btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
+      return;
+    }
+    console.warn('Event error (continuing without event):', evtErr);
+  }
 
-    // 2. Upload all images to Cloudinary in parallel
-    var uploaded  = 0;
-    var photoUrls = await Promise.all(selectedFiles.map(async function(file) {
+  // 2. Upload images to Cloudinary
+  var photoUrls;
+  try {
+    var uploaded = 0;
+    photoUrls = await Promise.all(selectedFiles.map(async function(file) {
       var url = await uploadToCloudinary(file);
       if (n > 1) btn.textContent = 'Uploading ' + (++uploaded) + ' of ' + n + '…';
       return url;
     }));
+  } catch(cloudErr) {
+    console.error('Cloudinary upload failed:', cloudErr);
+    toast('Photo upload failed. Check your Cloudinary config.');
+    btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
+    return;
+  }
 
-    var caption = document.getElementById('caption').value.trim();
+  var caption = document.getElementById('caption').value.trim();
 
-    // 3. Reverse-geocode
-    var locName = pendingLat.toFixed(3) + ', ' + pendingLng.toFixed(3);
-    try {
-      var geo = await fetch(
-        'https://nominatim.openstreetmap.org/reverse?lat=' + pendingLat + '&lon=' + pendingLng + '&format=json',
-        { headers: { 'Accept-Language': 'en' } }
-      );
-      if (geo.ok) {
-        var d = await geo.json(), a = d.address;
-        locName = a.city || a.town || a.village || a.county || a.state || locName;
-        if (a.country && locName !== a.country) locName += ', ' + a.country;
-      }
-    } catch(_) {}
+  // 3. Reverse-geocode
+  var locName = pendingLat.toFixed(3) + ', ' + pendingLng.toFixed(3);
+  try {
+    var geo = await fetch(
+      'https://nominatim.openstreetmap.org/reverse?lat=' + pendingLat + '&lon=' + pendingLng + '&format=json',
+      { headers: { 'Accept-Language': 'en' } }
+    );
+    if (geo.ok) {
+      var d = await geo.json(), a = d.address;
+      locName = a.city || a.town || a.village || a.county || a.state || locName;
+      if (a.country && locName !== a.country) locName += ', ' + a.country;
+    }
+  } catch(_) {}
 
-    // 4. Build photo entries
-    var photoEntries = photoUrls.map(function(url) {
-      return {
-        url:           url,
-        caption:       caption,
-        uploadedBy:    currentUser.uid,
-        uploaderName:  currentUser.displayName || 'Someone',
-        uploaderPhoto: currentUser.photoURL    || null,
-        createdAt:     new Date().toISOString()
-      };
-    });
+  // 4. Build photo entries
+  var photoEntries = photoUrls.map(function(url) {
+    return {
+      url:           url,
+      caption:       caption,
+      uploadedBy:    currentUser.uid,
+      uploaderName:  currentUser.displayName || 'Someone',
+      uploaderPhoto: currentUser.photoURL    || null,
+      createdAt:     new Date().toISOString()
+    };
+  });
 
-    // 5. Merge into nearby location only if it shares the same event
-    //    (so two visits to the same spot at different times stay separate)
-    var MERGE_RADIUS_M  = 3000;
-    var myEventId       = eventInfo ? eventInfo.id : null;
-    var nearby = locations.find(function(l) {
-      var sameEvent = (l.eventId || null) === myEventId;
-      return sameEvent && map.distance([l.lat, l.lng], [pendingLat, pendingLng]) < MERGE_RADIUS_M;
-    });
+  // 5. Merge into nearby location (same event only) or create new
+  var MERGE_RADIUS_M  = 3000;
+  var myEventId       = eventInfo ? eventInfo.id : null;
+  var nearby = locations.find(function(l) {
+    var sameEvent = (l.eventId || null) === myEventId;
+    return sameEvent && map.distance([l.lat, l.lng], [pendingLat, pendingLng]) < MERGE_RADIUS_M;
+  });
 
+  try {
     if (nearby) {
       await db.collection('locations').doc(nearby.id).update({
         photos: firebase.firestore.FieldValue.arrayUnion.apply(
@@ -355,18 +380,16 @@ async function savePhoto() {
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     }
-
-    document.getElementById('upload-overlay').classList.remove('open');
-    if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
-    resetUpload();
-    map.flyTo([pendingLat, pendingLng], Math.max(map.getZoom(), 9), { duration: 1.4 });
-    toast(n > 1 ? n + ' photos added!' : 'Photo added!');
-
-  } catch(err) {
-    if (err.message === 'invalid-date') return; // toast already shown
-    console.error('Save failed:', err);
-    toast('Upload failed. Check your connection and try again.');
-    btn.disabled    = false;
-    btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
+  } catch(dbErr) {
+    console.error('Firestore write failed:', dbErr);
+    toast('Photos uploaded to Cloudinary but map save failed. Check your Firestore rules (README step 1.4).');
+    btn.disabled = false; btn.textContent = n > 1 ? 'Add ' + n + ' Photos to Map' : 'Add to Map';
+    return;
   }
+
+  document.getElementById('upload-overlay').classList.remove('open');
+  if (tempPinMarker) { map.removeLayer(tempPinMarker); tempPinMarker = null; }
+  resetUpload();
+  map.flyTo([pendingLat, pendingLng], Math.max(map.getZoom(), 9), { duration: 1.4 });
+  toast(n > 1 ? n + ' photos added!' : 'Photo added!');
 }

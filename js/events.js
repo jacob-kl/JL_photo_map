@@ -7,31 +7,28 @@
 //
 // "Day to Day" is the default — no event, no friction.
 //
-// Reads:  db, currentUser, connectedUIDs, locations
+// Reads:  db, currentUser, connectedUIDs, locations, map
 // Writes: events, selectedEventId, selectedEventFilter
 // ─────────────────────────────────────────────────────────
-let events              = [];          // loaded from Firestore
-let selectedEventId     = 'daytoday'; // 'daytoday' | eventId | 'new'
+let events              = [];
+let selectedEventId     = 'daytoday';
 let newEventName        = '';
 let newEventDate        = '';
-let selectedEventFilter = null;        // null = show all events
-let currentViewerLocId  = null;        // set by viewer.js when a location is opened
+let selectedEventFilter = null;
+let currentViewerLocId  = null;
 
 // ── Real-time listener ───────────────────────────────────
-// Called from connections.js after the location listener starts
 function startEventsListener() {
   if (!currentUser) return;
 
-  // Load events from all connected users + your own
   var allUIDs = [currentUser.uid].concat(connectedUIDs);
 
   db.collection('events')
-    .where('createdBy', 'in', allUIDs.slice(0, 30)) // Firestore 'in' limit
+    .where('createdBy', 'in', allUIDs.slice(0, 30))
     .onSnapshot(function(snap) {
       events = snap.docs.map(function(doc) {
         return Object.assign({ id: doc.id }, doc.data());
       });
-      // Sort newest first by date string (MM/YYYY sorts as MMYYYY = close enough)
       events.sort(function(a, b) {
         var da = (a.date || '').split('/').reverse().join('');
         var db2 = (b.date || '').split('/').reverse().join('');
@@ -44,25 +41,65 @@ function startEventsListener() {
     });
 }
 
+// ── Nearby events (used by picker when location is set) ──
+// Returns events that have existing location pins within 100 miles
+// of the pending upload location.
+function getNearbyEvents() {
+  if (pendingLat === null || pendingLng === null) return [];
+
+  var RADIUS_M = 160934; // 100 miles in metres
+  var nearbyIds = new Set();
+
+  (locations || []).forEach(function(loc) {
+    if (loc.eventId && typeof map !== 'undefined') {
+      try {
+        var dist = map.distance([loc.lat, loc.lng], [pendingLat, pendingLng]);
+        if (dist < RADIUS_M) nearbyIds.add(loc.eventId);
+      } catch(_) {}
+    }
+  });
+
+  return events.filter(function(evt) { return nearbyIds.has(evt.id); });
+}
+
 // ── Event picker (in upload modal) ───────────────────────
 function renderEventPicker() {
   var container = document.getElementById('event-picker-options');
   if (!container) return;
   container.innerHTML = '';
 
-  // Day to Day (default)
+  var hasLocation = (pendingLat !== null && pendingLng !== null);
+  var nearbyEvts  = hasLocation ? getNearbyEvents() : [];
+
+  // Day to Day (always first)
   container.appendChild(makeEventPill('daytoday', '📅 Day to Day', selectedEventId === 'daytoday'));
 
-  // Existing events
-  events.forEach(function(evt) {
-    var label = evt.name + ' (' + evt.date + ')';
-    container.appendChild(makeEventPill(evt.id, label, selectedEventId === evt.id));
-  });
+  if (!hasLocation) {
+    // Prompt user to set a location first
+    var hint = document.createElement('span');
+    hint.className   = 'event-picker-hint';
+    hint.textContent = 'Set a location above to see nearby events';
+    container.appendChild(hint);
+  } else if (nearbyEvts.length > 0) {
+    nearbyEvts.forEach(function(evt) {
+      var label = evt.name + (evt.date ? ' (' + evt.date + ')' : '');
+      container.appendChild(makeEventPill(evt.id, label, selectedEventId === evt.id));
+    });
+  } else if (events.length > 0) {
+    // No nearby events — show all as a fallback with a note
+    var hint = document.createElement('span');
+    hint.className   = 'event-picker-hint';
+    hint.textContent = 'No events within 100 mi — showing all';
+    container.appendChild(hint);
+    events.forEach(function(evt) {
+      var label = evt.name + (evt.date ? ' (' + evt.date + ')' : '');
+      container.appendChild(makeEventPill(evt.id, label, selectedEventId === evt.id));
+    });
+  }
 
-  // Create new event
+  // Create new event (always available)
   container.appendChild(makeEventPill('new', '+ New Event', selectedEventId === 'new'));
 
-  // Show new-event form only when "new" is selected
   document.getElementById('new-event-form').style.display =
     selectedEventId === 'new' ? 'block' : 'none';
 }
@@ -102,13 +139,11 @@ function resetEventPicker() {
   renderEventPicker();
 }
 
-// Returns { id, name, date } for the chosen event, or null for Day to Day.
-// Creates a new Firestore event document if "new" was chosen.
 async function resolveSelectedEvent() {
   if (selectedEventId === 'daytoday') return null;
 
   if (selectedEventId === 'new') {
-    if (!newEventName) return null; // no name = treat as Day to Day
+    if (!newEventName) return null;
     if (newEventDate && !isValidDate(newEventDate)) {
       toast('Enter a valid date in MM/YYYY format.');
       throw new Error('invalid-date');
@@ -122,7 +157,6 @@ async function resolveSelectedEvent() {
     return { id: ref.id, name: newEventName, date: newEventDate || '' };
   }
 
-  // Existing event
   var evt = events.find(function(e) { return e.id === selectedEventId; });
   return evt ? { id: evt.id, name: evt.name, date: evt.date || '' } : null;
 }
@@ -135,19 +169,15 @@ function isValidDate(d) {
   return m >= 1 && m <= 12 && y >= 2000 && y <= 2099;
 }
 
-// ── Event filter (in the map filter row) ─────────────────
+// ── Event filter (in map filter row) ─────────────────────
 function renderEventFilter() {
-  // This adds event pills to the existing filter-row after the uploader pills.
-  // Called by renderFilter() in map.js and whenever events or locations change.
   var row = document.getElementById('filter-row');
   if (!row) return;
 
-  // Remove any previous event pills + divider from the row
   row.querySelectorAll('.event-divider, .event-filter-btn').forEach(function(el) {
     el.parentNode.removeChild(el);
   });
 
-  // Collect unique events that appear in current visible locations
   var seen = new Map();
   locations.forEach(function(loc) {
     if (loc.eventId && loc.eventName && !seen.has(loc.eventId)) {
@@ -157,21 +187,17 @@ function renderEventFilter() {
 
   if (seen.size === 0) return;
 
-  // Visual divider
   var divider = document.createElement('span');
   divider.className   = 'event-divider';
   divider.textContent = '·';
   row.appendChild(divider);
 
-  // "All" pill
   row.appendChild(makeFilterBtn(null, '📅 All', selectedEventFilter === null));
 
-  // One pill per event
   seen.forEach(function(evt) {
     row.appendChild(makeFilterBtn(evt.id, evt.name, selectedEventFilter === evt.id));
   });
 
-  // Show the row if it was hidden
   row.style.display = 'flex';
 }
 
@@ -187,7 +213,6 @@ function makeFilterBtn(id, label, active) {
   return btn;
 }
 
-// Used by map.js renderMarkers()
 function locationMatchesEventFilter(loc) {
   if (selectedEventFilter === null) return true;
   return loc.eventId === selectedEventFilter;
@@ -212,7 +237,6 @@ function openAddEventOverlay(locId) {
       list.appendChild(item);
     });
 
-    // Option to remove event tag
     var removeItem = document.createElement('button');
     removeItem.className = 'ae-item ae-remove';
     removeItem.innerHTML = '<span class="ae-name">Remove from event</span>';

@@ -13,15 +13,20 @@
   <!-- Fonts -->
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 
-  <!-- App styles (edit these files to change how the app looks) -->
-  <link rel="stylesheet" href="css/base.css"/>      <!-- colours, fonts, variables -->
-  <link rel="stylesheet" href="css/layout.css"/>    <!-- header, map, FAB, filter, toast -->
-  <link rel="stylesheet" href="css/modals.css"/>    <!-- shared overlay + sheet -->
-  <link rel="stylesheet" href="css/upload.css"/>    <!-- upload modal + search -->
-  <link rel="stylesheet" href="css/viewer.css"/>    <!-- photo grid + lightbox -->
-  <link rel="stylesheet" href="css/sharing.css"/>   <!-- sharing panel + invite codes -->
+  <!-- App styles -->
+  <link rel="stylesheet" href="css/base.css"/>
+  <link rel="stylesheet" href="css/layout.css"/>
+  <link rel="stylesheet" href="css/modals.css"/>
+  <link rel="stylesheet" href="css/upload.css"/>
+  <link rel="stylesheet" href="css/viewer.css"/>
+  <link rel="stylesheet" href="css/sharing.css"/>
 </head>
 <body>
+
+  <!-- ── Globe (default view) ───────────────────────────── -->
+  <!-- Globe sits above the Leaflet map in z-order.         -->
+  <!-- "hidden" class fades it out when flat map is active. -->
+  <div id="globe-container"></div>
 
   <!-- ── Header ─────────────────────────────────────────── -->
   <div class="app-header">
@@ -40,16 +45,18 @@
     <button id="auth-btn" class="auth-btn" onclick="handleAuthClick()">Sign in</button>
   </div>
 
-  <!-- Filter row — appears automatically once 2+ people upload -->
+  <!-- Filter row -->
   <div id="filter-row" class="filter-row"></div>
 
+  <!-- Flat Leaflet map (hidden until user leaves globe) -->
   <div id="map"></div>
 
-  <!-- Map style switcher -->
+  <!-- Map / Globe style switcher -->
   <div class="map-style-switcher">
-    <button class="ms-btn"        data-style="streets"   onclick="setMapStyle('streets')">Streets</button>
-    <button class="ms-btn active" data-style="topo"      onclick="setMapStyle('topo')">Atlas</button>
-    <button class="ms-btn"        data-style="satellite" onclick="setMapStyle('satellite')">Satellite</button>
+    <button class="ms-btn active" data-style="globe"    onclick="setMapStyle('globe')">🌍 Globe</button>
+    <button class="ms-btn"        data-style="streets"  onclick="setMapStyle('streets')">Streets</button>
+    <button class="ms-btn"        data-style="topo"     onclick="setMapStyle('topo')">Atlas</button>
+    <button class="ms-btn"        data-style="satellite"onclick="setMapStyle('satellite')">Satellite</button>
   </div>
 
   <div id="pin-banner">📍 Tap anywhere on the map to place your photo</div>
@@ -134,7 +141,7 @@
 
       <div class="loc-status" id="loc-status"></div>
 
-      <!-- Event picker -->
+      <!-- Event picker — shows after a location is set -->
       <div class="event-section">
         <div class="loc-label">Which trip is this from? <span class="optional-tag">optional</span></div>
         <div class="event-picker-scroll" id="event-picker-options">
@@ -264,20 +271,22 @@
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-auth-compat.js"></script>
+  <!-- Globe.gl — 3D globe renderer. Falls back gracefully if blocked. -->
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl/dist/globe.gl.min.js"></script>
 
-  <!-- Config: fill in your credentials here -->
+  <!-- Config: loaded from /api/config on Vercel (env vars), or config.js locally -->
   <script src="config.js"></script>
 
   <!-- App modules (order matters — firebase.js must be first) -->
-  <script src="js/firebase.js"></script>     <!-- init db + auth -->
-  <script src="js/auth.js"></script>         <!-- sign in/out, FAB, keyboard, toast -->
-  <script src="js/map.js"></script>          <!-- tiles, markers, filter -->
-  <script src="js/connections.js"></script>  <!-- Firestore listeners, privacy -->
-  <script src="js/events.js"></script>       <!-- events: create, filter, add-to-event -->
-  <script src="js/viewer.js"></script>       <!-- photo grid -->
-  <script src="js/lightbox.js"></script>     <!-- full-screen viewer -->
-  <script src="js/upload.js"></script>       <!-- upload flow + Cloudinary -->
-  <script src="js/sharing.js"></script>      <!-- invite codes + connect -->
+  <script src="js/firebase.js"></script>
+  <script src="js/auth.js"></script>
+  <script src="js/map.js"></script>
+  <script src="js/connections.js"></script>
+  <script src="js/events.js"></script>
+  <script src="js/viewer.js"></script>
+  <script src="js/lightbox.js"></script>
+  <script src="js/upload.js"></script>
+  <script src="js/sharing.js"></script>
 
 </body>
 </html>

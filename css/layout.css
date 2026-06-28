@@ -348,3 +348,29 @@
 }
 .event-filter-btn:hover  { border-color: var(--accent); color: var(--text); }
 .event-filter-btn.active { border-color: var(--accent); background: #fffbeb; color: var(--text); }
+
+/* ─────────────────────────────────────────────────────────
+   Globe container (globe.gl renders here)
+───────────────────────────────────────────────────────── */
+#globe-container {
+  position: fixed;
+  inset: 0;
+  z-index: 50;          /* above Leaflet map (z-index 0) but below modals (800+) */
+  background: #060d1f;
+  opacity: 1;
+  transition: opacity .5s ease;
+}
+
+#globe-container.hidden {
+  opacity: 0;
+  pointer-events: none; /* let clicks through to Leaflet when faded */
+}
+
+/* Leaflet map — always rendered underneath the globe */
+#map {
+  z-index: 1;
+  opacity: 0;           /* invisible until user leaves globe */
+  transition: opacity .4s ease;
+}
+
+#map.visible { opacity: 1; }
