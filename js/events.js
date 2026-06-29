@@ -289,7 +289,7 @@ function buildEventDropdown(eventsMap, anchorBtn) {
 
     // Auto-expand the most recent year, or whichever contains the active filter
     var hasActive = byYear[year].some(function(e) { return e.id === selectedEventFilter; });
-    var isOpen    = (idx === 0) || hasActive;
+    var isOpen    = hasActive; // collapsed by default; only open if it holds the active filter
 
     var header = document.createElement('button');
     header.type      = 'button';
