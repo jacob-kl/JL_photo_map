@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="css/upload.css"/>    <!-- upload modal + search -->
   <link rel="stylesheet" href="css/viewer.css"/>    <!-- photo grid + lightbox -->
   <link rel="stylesheet" href="css/sharing.css"/>   <!-- sharing panel + invite codes -->
+  <link rel="stylesheet" href="css/event-additions.css"/>  <!-- event dropdown + private toggle -->
 </head>
 <body>
 
@@ -43,12 +44,16 @@
   <!-- Filter row — appears automatically once 2+ people upload -->
   <div id="filter-row" class="filter-row"></div>
 
+  <!-- Globe.gl renders here; sits above Leaflet at z-index 50 -->
+  <div id="globe-container"></div>
+
   <div id="map"></div>
 
   <!-- Map style switcher -->
   <div class="map-style-switcher">
+    <button class="ms-btn active" data-style="globe"     onclick="setMapStyle('globe')">🌍 Globe</button>
     <button class="ms-btn"        data-style="streets"   onclick="setMapStyle('streets')">Streets</button>
-    <button class="ms-btn active" data-style="topo"      onclick="setMapStyle('topo')">Atlas</button>
+    <button class="ms-btn"        data-style="topo"      onclick="setMapStyle('topo')">Atlas</button>
     <button class="ms-btn"        data-style="satellite" onclick="setMapStyle('satellite')">Satellite</button>
   </div>
 
@@ -343,6 +348,9 @@
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-firestore-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/12.3.0/firebase-auth-compat.js"></script>
+
+  <!-- Globe.gl — 3D globe renderer (falls back gracefully if blocked) -->
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl/dist/globe.gl.min.js"></script>
 
   <!-- Config: fill in your credentials here -->
   <script src="config.js"></script>
