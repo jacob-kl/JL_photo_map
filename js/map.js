@@ -51,20 +51,24 @@ var tileSources = {
 // ── MapLibre init ─────────────────────────────────────────
 // No accessToken needed — MapLibre is open source.
 var maplibreMap = new maplibregl.Map({
-  container:  'map',
+  container: 'map',
   style: {
     version: 8,
-    glyphs:  'https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf',
-    sources: { base: tileSources.topo },
-    layers:  [
-      { id: 'topo',      type: 'raster', source: 'base', layout: { visibility: 'visible' } },
-      { id: 'streets',   type: 'raster', source: 'base', layout: { visibility: 'none'    } },
-      { id: 'satellite', type: 'raster', source: 'base', layout: { visibility: 'none'    } }
+    sources: {
+      // Each style needs its OWN source so toggling visibility actually changes tiles
+      topo:      tileSources.topo,
+      streets:   tileSources.streets,
+      satellite: tileSources.satellite
+    },
+    layers: [
+      { id: 'topo',      type: 'raster', source: 'topo',      layout: { visibility: 'visible' } },
+      { id: 'streets',   type: 'raster', source: 'streets',   layout: { visibility: 'none'    } },
+      { id: 'satellite', type: 'raster', source: 'satellite', layout: { visibility: 'none'    } }
     ]
   },
-  projection: { name: 'globe' },   // ← seamless globe→flat like Google Earth
-  zoom:       2,
-  center:     [-98, 38]
+  projection: 'globe',  // MapLibre v4 seamless globe→flat
+  zoom:   2,
+  center: [-98, 38]
 });
 
 maplibreMap.addControl(new maplibregl.NavigationControl({ visualizePitch: false }), 'bottom-left');
@@ -84,25 +88,6 @@ function addAtmosphere() {
 }
 
 maplibreMap.on('load', function() {
-  // Add all three tile sources so we can switch without reloading
-  Object.keys(tileSources).forEach(function(name) {
-    if (!maplibreMap.getSource(name)) {
-      maplibreMap.addSource(name, tileSources[name]);
-    }
-    if (!maplibreMap.getLayer(name)) {
-      maplibreMap.addLayer({
-        id:     name,
-        type:   'raster',
-        source: name,
-        layout: { visibility: name === activeStyleName ? 'visible' : 'none' }
-      });
-    }
-  });
-  // Remove the placeholder 'base' layers used in the initial style
-  ['topo', 'streets', 'satellite'].forEach(function(id) {
-    // Already added above — remove duplicates if any
-  });
-
   addAtmosphere();
   renderMarkers();
 });
@@ -131,15 +116,15 @@ function setMapStyle(style) {
     return;
   }
 
-  if (style === activeStyleName) return;
-  activeStyleName = style;
+  if (!tileSources[style] || style === activeStyleName) return;
 
-  // Toggle layer visibility — no style reload, no flash
-  Object.keys(tileSources).forEach(function(name) {
-    if (maplibreMap.getLayer(name)) {
-      maplibreMap.setLayoutProperty(name, 'visibility', name === style ? 'visible' : 'none');
-    }
-  });
+  // Hide current style layer, show the requested one
+  if (maplibreMap.getLayer(activeStyleName))
+    maplibreMap.setLayoutProperty(activeStyleName, 'visibility', 'none');
+  if (maplibreMap.getLayer(style))
+    maplibreMap.setLayoutProperty(style, 'visibility', 'visible');
+
+  activeStyleName = style;
 
   document.querySelectorAll('.ms-btn').forEach(function(b) {
     b.classList.toggle('active', b.dataset.style === style);
