@@ -437,3 +437,21 @@
   transition: color .15s; flex-shrink: 0;
 }
 .install-close:hover { color: #fff; }
+
+/* ── Globe container ─────────────────────────────────────
+   globe.gl renders here. Sits above MapLibre (#map z-index 1)
+   but below UI controls (header/modals at 800+).
+   Opacity transition = smooth cross-fade with the flat map. */
+#globe-container {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  background: #060d1f;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+  pointer-events: all;
+}
+#globe-container.flat-mode {
+  opacity: 0;
+  pointer-events: none;
+}

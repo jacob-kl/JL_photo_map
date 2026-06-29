@@ -51,6 +51,9 @@
   <!-- Filter row — appears automatically once 2+ people upload -->
   <div id="filter-row" class="filter-row"></div>
 
+  <!-- Globe.gl renders here; sits above MapLibre (#map) at z-index 50 -->
+  <div id="globe-container"></div>
+
   <div id="map"></div>
 
   <!-- Map style switcher -->
@@ -376,6 +379,9 @@
   <!-- MapLibre GL JS — open-source globe+map, no API key needed -->
   <link href="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.css" rel="stylesheet"/>
   <script src="https://cdn.jsdelivr.net/npm/maplibre-gl@5/dist/maplibre-gl.js"></script>
+
+  <!-- Globe.gl — 3D marble globe (globe.gl renders in #globe-container) -->
+  <script src="https://cdn.jsdelivr.net/npm/globe.gl@2/dist/globe.gl.min.js"></script>
 
   <!-- Config: fill in your credentials here -->
   <script src="config.js"></script>
