@@ -54,6 +54,7 @@ var maplibreMap = new maplibregl.Map({
   container: 'map',
   style: {
     version: 8,
+    projection: { type: 'globe' },   // MapLibre v5 style-level globe
     sources: {
       // Each style needs its OWN source so toggling visibility actually changes tiles
       topo:      tileSources.topo,

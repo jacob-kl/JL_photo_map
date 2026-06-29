@@ -1,18 +1,117 @@
 // ─────────────────────────────────────────────────────────
-// Viewer — photo grid for a single location
+// Photo Viewer
+//
+// Shows a bottom-sheet grid of photos for a map location.
+// Displays event info if the location is tagged with one.
+// Tapping a photo opens the Lightbox.
+//
+// Reads:  currentUser, events (events.js)
+// Calls:  openLightbox (lightbox.js)
+//         openAddEventOverlay (events.js)
 // ─────────────────────────────────────────────────────────
-let currentLoc        = null;
+
+function uploaderBadgeHTML(photo) {
+  if (photo.uploaderPhoto) {
+    return '<div class="uploader-badge"><img src="' + photo.uploaderPhoto +
+           '" title="' + (photo.uploaderName || '') + '"/></div>';
+  }
+  var initial = ((photo.uploaderName || '?')[0]).toUpperCase();
+  return '<div class="uploader-badge"><div class="uploader-initial">' + initial + '</div></div>';
+}
 
 function openViewer(loc) {
-  currentLoc         = loc;
+  if (typeof pinMode !== 'undefined' && pinMode) return;
+
+  // Track which location is open so "Add to Event" knows which doc to update
   currentViewerLocId = loc.id;
-  renderViewer(loc);
+
+  // Event badge
+  var badge = document.getElementById('vwr-event-badge');
+  if (loc.eventName) {
+    badge.textContent = '📅 ' + loc.eventName + (loc.eventDate ? ' · ' + loc.eventDate : '');
+    badge.style.display = 'block';
+  } else {
+    badge.style.display = 'none';
+  }
+
+  var locEl = document.getElementById('vwr-location');
+  currentLoc = loc;
+  if (currentUser && loc.ownedBy === currentUser.uid) {
+    locEl.innerHTML =
+      '<span id="vwr-name-text">' + escHtml(loc.name) + '</span>' +
+      ' <button class="vwr-icon-btn" title="Rename" onclick="startRenameLocation()">✏️</button>' +
+      ' <button class="vwr-icon-btn" title="Delete pin" onclick="confirmDeleteLocation()">🗑️</button>';
+  } else {
+    locEl.textContent = loc.name;
+  }
+  document.getElementById('vwr-title').textContent =
+    loc.photos.length + ' photo' + (loc.photos.length !== 1 ? 's' : '');
+
+  var grid = document.getElementById('vwr-grid');
+  grid.innerHTML = '';
+  loc.photos.forEach(function(ph, i) {
+    var el = document.createElement('div');
+    el.className = 'photo-grid-item';
+    el.innerHTML =
+      '<img src="' + ph.url + '" alt="' + (ph.caption || '') + '" loading="lazy"/>' +
+      (ph.caption ? '<div class="caption-overlay">' + ph.caption + '</div>' : '') +
+      uploaderBadgeHTML(ph);
+    (function(idx) { el.onclick = function() { openLightbox(loc, idx); }; })(i);
+    grid.appendChild(el);
+  });
+
+  // "Add to Event" button — always shown so you can tag or re-tag
+  var addEvtBtn = document.getElementById('vwr-add-event-btn');
+  addEvtBtn.textContent = loc.eventName ? '📅 Change event' : '📅 Add to event';
+
   document.getElementById('viewer-overlay').classList.add('open');
 }
 
 function maybeCloseViewer(e) {
   if (e.target === document.getElementById('viewer-overlay'))
     document.getElementById('viewer-overlay').classList.remove('open');
+}
+
+// ── New: rename, delete, swipe (added without changing existing code) ─
+let currentLoc = null;
+
+function escHtml(s) {
+  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+function startRenameLocation() {
+  var locEl = document.getElementById('vwr-location');
+  locEl.innerHTML =
+    '<input id="rename-input" class="rename-input" value="' + escHtml(currentLoc.name) + '" maxlength="80"/>' +
+    ' <button class="btn-outline-sm" style="padding:5px 10px;font-size:12px" onclick="saveRenameLocation()">Save</button>' +
+    ' <button class="btn-outline-sm" style="padding:5px 10px;font-size:12px" onclick="openViewer(currentLoc)">Cancel</button>';
+  var inp = document.getElementById('rename-input');
+  inp.focus(); inp.select();
+  inp.addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') saveRenameLocation();
+    if (e.key === 'Escape') openViewer(currentLoc);
+  });
+}
+
+async function saveRenameLocation() {
+  var inp  = document.getElementById('rename-input');
+  var name = inp ? inp.value.trim() : '';
+  if (!name) return;
+  try {
+    await db.collection('locations').doc(currentLoc.id).update({ name: name });
+    currentLoc = Object.assign({}, currentLoc, { name: name });
+    openViewer(currentLoc);
+    toast('Location renamed.');
+  } catch(err) { console.error(err); toast('Rename failed.'); }
+}
+
+async function confirmDeleteLocation() {
+  if (!confirm('Delete "' + currentLoc.name + '" and all its photos?')) return;
+  try {
+    await db.collection('locations').doc(currentLoc.id).delete();
+    document.getElementById('viewer-overlay').classList.remove('open');
+    toast('Location deleted.');
+  } catch(err) { console.error(err); toast('Delete failed.'); }
 }
 
 // Swipe-down to close
@@ -27,100 +126,3 @@ function maybeCloseViewer(e) {
       document.getElementById('viewer-overlay').classList.remove('open');
   }, { passive: true });
 })();
-
-function renderViewer(loc) {
-  // Location name with rename / delete buttons (owner only)
-  var nameEl = document.getElementById('vwr-location');
-  if (nameEl) {
-    nameEl.innerHTML =
-      '<span id="vwr-name-text">' + escHtml(loc.name) + '</span>' +
-      (currentUser && loc.ownedBy === currentUser.uid
-        ? ' <button class="vwr-icon-btn" title="Rename" onclick="startRenameLocation()">✏️</button>' +
-          ' <button class="vwr-icon-btn" title="Delete pin" onclick="deleteLocation()">🗑️</button>'
-        : '');
-  }
-
-  // Event badge
-  var badgeEl = document.getElementById('vwr-event-badge');
-  if (badgeEl) {
-    if (loc.eventName) {
-      badgeEl.textContent = '📅 ' + loc.eventName;
-      badgeEl.style.display = '';
-    } else {
-      badgeEl.style.display = 'none';
-    }
-  }
-
-  // Title / caption (show location coords if nothing else)
-  var titleEl = document.getElementById('vwr-title');
-  if (titleEl) titleEl.textContent = '';
-
-  // Add-to-event button
-  var evtBtn = document.getElementById('vwr-add-event-btn');
-  if (evtBtn) {
-    evtBtn.textContent = loc.eventName ? '📅 Change event' : '📅 Add to event';
-  }
-
-  // Photo grid
-  var grid = document.getElementById('vwr-grid');
-  if (!grid) return;
-  grid.innerHTML = '';
-  (loc.photos || []).forEach(function(ph, i) {
-    var thumb = document.createElement('div');
-    thumb.className = 'vwr-thumb';
-    var img = document.createElement('img');
-    img.src     = ph.url;
-    img.loading = 'lazy';
-    img.onclick = (function(idx) {
-      return function() { openLightbox(loc.photos, idx, loc); };
-    })(i);
-    thumb.appendChild(img);
-    grid.appendChild(thumb);
-  });
-}
-
-// ── Rename location ───────────────────────────────────────
-function startRenameLocation() {
-  var nameEl = document.getElementById('vwr-location');
-  var current = currentLoc ? currentLoc.name : '';
-  nameEl.innerHTML =
-    '<input id="rename-input" class="rename-input" value="' + escHtml(current) + '" maxlength="80"/>' +
-    ' <button class="btn-outline-sm" style="font-size:12px;padding:5px 10px" onclick="saveRenameLocation()">Save</button>' +
-    ' <button class="btn-outline-sm" style="font-size:12px;padding:5px 10px" onclick="renderViewer(currentLoc)">Cancel</button>';
-  var inp = document.getElementById('rename-input');
-  inp.focus(); inp.select();
-  inp.addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') saveRenameLocation();
-    if (e.key === 'Escape') renderViewer(currentLoc);
-  });
-}
-
-async function saveRenameLocation() {
-  var inp  = document.getElementById('rename-input');
-  var name = inp ? inp.value.trim() : '';
-  if (!name) return;
-  try {
-    await db.collection('locations').doc(currentLoc.id).update({ name: name });
-    currentLoc = Object.assign({}, currentLoc, { name: name });
-    renderViewer(currentLoc);
-    toast('Location renamed.');
-  } catch(err) {
-    console.error(err); toast('Rename failed.');
-  }
-}
-
-// ── Delete location ───────────────────────────────────────
-async function deleteLocation() {
-  if (!confirm('Delete "' + currentLoc.name + '" and all its photos?')) return;
-  try {
-    await db.collection('locations').doc(currentLoc.id).delete();
-    document.getElementById('viewer-overlay').classList.remove('open');
-    toast('Location deleted.');
-  } catch(err) {
-    console.error(err); toast('Delete failed. Check Firestore rules.');
-  }
-}
-
-function escHtml(s) {
-  return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
