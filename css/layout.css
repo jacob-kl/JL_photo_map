@@ -541,8 +541,7 @@
   transform: translateY(0);
 }
 
-/* Make header relative so dropdown positions correctly */
-
+/* .app-header already position:fixed — no override needed; fixed is a containing block */
 
 .app-menu-item {
   display: flex; align-items: center; gap: 10px;

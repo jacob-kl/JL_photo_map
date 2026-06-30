@@ -67,3 +67,9 @@
   transition: opacity .15s;
 }
 .vwr-icon-btn:hover { opacity: 1; }
+
+/* Location picker thumbnails (co-located pins) */
+.lp-thumb {
+  width: 28px; height: 28px; border-radius: 6px;
+  object-fit: cover; margin-right: 8px; vertical-align: middle;
+}

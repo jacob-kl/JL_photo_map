@@ -232,12 +232,22 @@ function makeDropItem(id,label) {
   b.textContent=label; b.onclick=function(){applyEventFilter(id);}; return b;
 }
 function applyEventFilter(id) {
-  selectedEventFilter=id;
-  var d=document.getElementById('event-dropdown'); if(d) d.remove();
-  renderEventFilter(); renderMarkers();
+  selectedEventFilter = id;
+  var d = document.getElementById('event-dropdown'); if (d) d.remove();
+  renderEventFilter();
+  // Selecting a trip ZOOMS to it now — it no longer hides other pins.
+  // "All trips" (id === null) zooms back out to fit everything.
+  if (id === null) {
+    zoomToFitAllLocations();
+  } else {
+    zoomToEventLocations(id);
+  }
 }
+
+// Kept for backward compatibility — always true now since trip selection
+// no longer filters which pins are shown (see applyEventFilter above).
 function locationMatchesEventFilter(loc) {
-  return selectedEventFilter===null || loc.eventId===selectedEventFilter;
+  return true;
 }
 
 // ── Edit / delete event ───────────────────────────────────

@@ -108,13 +108,16 @@ function initGlobe() {
         '<path d="M11 0C4.93 0 0 4.93 0 11c0 8.25 11 19 11 19S22 19.25 22 11C22 4.93 17.07 0 11 0z" fill="#ef4444"/>' +
         '<circle cx="11" cy="11" r="4.5" fill="white"/></svg>';
       el.title = d.name;
-      el.addEventListener('click', function() {
-        var pov = globeInstance.pointOfView();
-        enterFlatMap(d.lat, d.lng, pov.altitude);
+      el.addEventListener('click', function(e) {
+        e.stopPropagation();
+        // Always zoom in close (fixed altitude), not whatever the current
+        // globe zoom happens to be — clicking a pin should feel like a
+        // deliberate "go there" action, not a relative zoom.
+        enterFlatMap(d.lat, d.lng, 0.12);
         setTimeout(function() {
           var loc = locations.find(function(l){ return Math.abs(l.lat-d.lat)<0.001&&Math.abs(l.lng-d.lng)<0.001; });
           if (loc) openViewer(loc);
-        }, 550);
+        }, 600);
       });
       return el;
     })(container);
@@ -314,7 +317,8 @@ function renderMarkers() {
   activeMarkers.forEach(function(m){m.remove();}); activeMarkers=[];
   var visible=[];
   (locations||[]).forEach(function(loc){
-    if (!locationMatchesEventFilter(loc)) return;
+    // Trip selection no longer hides other pins — selecting a trip
+    // zooms to it instead (see applyEventFilter / zoomToEventLocations).
     var photos=getFilteredPhotos(loc);
     if (!photos.length) return;
     visible.push(Object.assign({},loc,{photos:photos}));
@@ -328,6 +332,19 @@ function renderMarkers() {
       el=buildClusterEl(group);
       onClick=(function(g){return function(){
         var lngs=g.map(function(l){return l.lng;}),lats=g.map(function(l){return l.lat;});
+        var latSpread = Math.max.apply(null,lats) - Math.min.apply(null,lats);
+        var lngSpread = Math.max.apply(null,lngs) - Math.min.apply(null,lngs);
+
+        // If every location in this cluster is essentially at the same
+        // coordinates (e.g. two events both geocoded to "Albuquerque, NM"),
+        // zooming in will NEVER separate them — they'll always project to
+        // the same screen pixel. Show a picker instead of fitBounds-ing
+        // into an infinite loop.
+        if (latSpread < 0.0008 && lngSpread < 0.0008) {
+          openLocationPicker(g);
+          return;
+        }
+
         maplibreMap.fitBounds([[Math.min.apply(null,lngs),Math.min.apply(null,lats)],
           [Math.max.apply(null,lngs),Math.max.apply(null,lats)]],{padding:80,maxZoom:12,duration:700});
       };})(group);
@@ -382,4 +399,74 @@ function getFilteredPhotos(loc){
   if(!loc.photos)return[];
   if(selectedUids.size===0)return loc.photos;
   return loc.photos.filter(function(p){return selectedUids.has(p.uploadedBy);});
+}
+
+// ── Location picker for co-located pins ───────────────────
+// Shown when two+ locations share (almost) the same coordinates
+// and can never be visually separated by zooming.
+function openLocationPicker(locs) {
+  var overlay = document.getElementById('location-picker-overlay');
+  var list    = document.getElementById('location-picker-list');
+  if (!overlay || !list) return;
+  list.innerHTML = '';
+  locs.forEach(function(loc) {
+    var item = document.createElement('button');
+    item.className = 'ae-item';
+    var thumb = loc.photos && loc.photos[0] ? loc.photos[0].url : '';
+    item.innerHTML =
+      '<span class="ae-name">' +
+        (thumb ? '<img src="'+thumb+'" class="lp-thumb"/>' : '') +
+        (loc.eventName ? loc.eventName : loc.name) +
+      '</span>' +
+      '<span class="ae-date">' + (loc.photos ? loc.photos.length : 0) + ' photo' + ((loc.photos&&loc.photos.length!==1)?'s':'') + '</span>';
+    item.onclick = function() {
+      overlay.classList.remove('open');
+      openViewer(loc);
+    };
+    list.appendChild(item);
+  });
+  overlay.classList.add('open');
+}
+
+function closeLocationPicker(e) {
+  if (!e || e.target === document.getElementById('location-picker-overlay'))
+    document.getElementById('location-picker-overlay').classList.remove('open');
+}
+
+// ── Zoom to a trip's locations without hiding other pins ──
+function zoomToEventLocations(eventId) {
+  var locs = (locations||[]).filter(function(l){ return l.eventId === eventId; });
+  if (!locs.length) return;
+
+  if (globeActive) {
+    var lat = locs.reduce(function(s,l){return s+l.lat;},0)/locs.length;
+    var lng = locs.reduce(function(s,l){return s+l.lng;},0)/locs.length;
+    enterFlatMap(lat, lng, locs.length > 1 ? 0.25 : 0.12);
+    return;
+  }
+
+  if (locs.length === 1) {
+    maplibreMap.flyTo({ center: [locs[0].lng, locs[0].lat], zoom: 11, duration: 900 });
+  } else {
+    var lngs = locs.map(function(l){return l.lng;}), lats = locs.map(function(l){return l.lat;});
+    maplibreMap.fitBounds(
+      [[Math.min.apply(null,lngs),Math.min.apply(null,lats)],[Math.max.apply(null,lngs),Math.max.apply(null,lats)]],
+      { padding: 100, maxZoom: 12, duration: 900 }
+    );
+  }
+}
+
+// "All trips" — zoom out to fit everything currently on the map
+function zoomToFitAllLocations() {
+  if (!locations || !locations.length) return;
+  if (globeActive) { enterGlobe(); return; }
+  if (locations.length === 1) {
+    maplibreMap.flyTo({ center: [locations[0].lng, locations[0].lat], zoom: 9, duration: 800 });
+    return;
+  }
+  var lngs = locations.map(function(l){return l.lng;}), lats = locations.map(function(l){return l.lat;});
+  maplibreMap.fitBounds(
+    [[Math.min.apply(null,lngs),Math.min.apply(null,lats)],[Math.max.apply(null,lngs),Math.max.apply(null,lats)]],
+    { padding: 80, maxZoom: 10, duration: 800 }
+  );
 }
